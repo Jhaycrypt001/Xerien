@@ -210,7 +210,12 @@ async def _event_stream(
         yield _sse({"type": "error", "text": "Couldn't reach the model API."})
     except genai_errors.APIError as e:
         if e.code == 429:
-            text_ = "Gemini rate limit reached (the free tier allows only a few requests per minute). Try again shortly."
+            log.warning("gemini 429: %s", e.message)
+            text_ = (
+                "This Gemini API key has no quota left for these models (the free tier is very limited). "
+                "Try again in a minute, enable billing on the key's Google AI Studio project, "
+                "or set ANTHROPIC_API_KEY to use Claude."
+            )
         elif e.code in (401, 403):
             text_ = "The server's Gemini API key is invalid or lacks access to this model."
         else:

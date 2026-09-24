@@ -7,6 +7,7 @@ Citations are attached afterwards from the grounding supports.
 
 from __future__ import annotations
 
+import asyncio
 import os
 import re
 import time
@@ -20,31 +21,90 @@ from .prompts import gemini_system
 # GEMINI_MODEL pins a model. Unset (or "auto"), the newest stable Flash model this key
 # can use is discovered from the API, since Google retires and gates model ids over time.
 MODEL = os.getenv("GEMINI_MODEL", "auto")
-_FLASH = re.compile(r"^gemini-(\d+(?:\.\d+)?)-flash$")
-_resolved: dict[str, Any] = {"model": None, "at": 0.0}
+_FLASH = re.compile(r"^gemini-(\d+(?:\.\d+)?)-flash(-lite)?$")
+_cache: dict[str, Any] = {"models": [], "at": 0.0, "working": None, "working_at": 0.0}
 
 
-async def resolve_model(client: genai.Client, refresh: bool = False) -> str:
+async def candidate_models(client: genai.Client, refresh: bool = False) -> list[str]:
+    """Models to try, best first: stable Flash (newest first), then flash-latest, then Flash-Lite."""
     if MODEL != "auto":
-        return MODEL
-    if _resolved["model"] and not refresh and time.time() - _resolved["at"] < 6 * 3600:
-        return _resolved["model"]
+        return [MODEL]
+    if _cache["models"] and not refresh and time.time() - _cache["at"] < 6 * 3600:
+        return _cache["models"]
     names = []
     async for m in await client.aio.models.list():
         if "generateContent" in (m.supported_actions or []):
             names.append((m.name or "").removeprefix("models/"))
-    stable = sorted((float(v.group(1)), n) for n in names if (v := _FLASH.match(n)))
-    if stable:
-        choice = stable[-1][1]
-    elif "gemini-flash-latest" in names:
-        choice = "gemini-flash-latest"
-    else:
-        flashes = [n for n in names if "flash" in n and not any(x in n for x in ("lite", "live", "image", "tts", "audio"))]
-        if not flashes:
-            raise RuntimeError("No Gemini Flash model is available for this API key")
-        choice = sorted(flashes)[-1]
-    _resolved.update(model=choice, at=time.time())
-    return choice
+    flash, lite = [], []
+    for n in names:
+        if v := _FLASH.match(n):
+            (lite if v.group(2) else flash).append((float(v.group(1)), n))
+    ordered = [n for _, n in sorted(flash, reverse=True)]
+    ordered += [n for n in ("gemini-flash-latest", "gemini-flash-lite-latest") if n in names]
+    ordered += [n for _, n in sorted(lite, reverse=True)]
+    if not ordered:
+        raise RuntimeError("No Gemini Flash model is available for this API key")
+    _cache.update(models=ordered, at=time.time())
+    return ordered
+
+
+def _retry_delay(e: errors.APIError) -> float | None:
+    for d in (e.details or {}).get("error", {}).get("details", []) if isinstance(e.details, dict) else []:
+        if str(d.get("@type", "")).endswith("RetryInfo"):
+            try:
+                return float(str(d.get("retryDelay", "")).rstrip("s"))
+            except ValueError:
+                return None
+    return None
+
+
+async def _open_stream(client: genai.Client, user_content: str, deep: bool):
+    """Find a (model, tools) combination this key can run right now and open the stream.
+
+    Free keys often have no quota for Search grounding on the newest models (429 with
+    'limit: 0'), and older ids get retired (404). Walk the candidates instead of failing,
+    and remember what worked so later runs start there.
+    """
+    working = _cache["working"] if time.time() - _cache["working_at"] < 1800 else None
+    models = await candidate_models(client)
+    plan = ([working] if working else []) + [(m, 2) for m in models] + [(models[0], 0)]
+    tried: set[tuple[str, int]] = set()
+    last: errors.APIError | None = None
+    refreshed = waited = False
+    i = 0
+    while i < len(plan) and len(tried) < 8:
+        model, tools = plan[i]
+        if (model, tools) in tried:
+            i += 1
+            continue
+        try:
+            stream = await client.aio.models.generate_content_stream(
+                model=model, contents=user_content, config=_config(deep, tools),
+            )
+            _cache.update(working=(model, tools), working_at=time.time())
+            return stream, model, tools
+        except errors.ClientError as e:
+            last = e
+            if e.code == 429:
+                delay = _retry_delay(e)
+                if not waited and delay is not None and delay <= 8 and "limit: 0" not in (e.message or ""):
+                    waited = True  # a short per-minute limit: wait once and retry the same combination
+                    await asyncio.sleep(delay + 0.5)
+                    continue
+                tried.add((model, tools))
+                i += 1  # no quota here: try the next model
+            elif e.code == 404 and not refreshed:
+                refreshed = True
+                models = await candidate_models(client, refresh=True)
+                plan = [(m, 2) for m in models] + [(models[0], 0)]
+                i = 0
+            elif e.code == 400 and tools > 0:
+                tried.add((model, tools))
+                plan.insert(i + 1, (model, tools - 1))  # URL context, then Search, may be unsupported
+                i += 1
+            else:
+                raise
+    raise last or RuntimeError("No Gemini model could be used")
 
 
 def _config(deep: bool, tools_level: int) -> types.GenerateContentConfig:
@@ -87,23 +147,7 @@ async def run(user_content: str, depth: str) -> AsyncIterator[dict[str, Any]]:
     client = genai.Client(api_key=os.environ["GEMINI_API_KEY"])
     deep = depth == "deep"
 
-    model = await resolve_model(client)
-    stream, tools_level, refreshed = None, 2, False
-    while stream is None:
-        try:
-            stream = await client.aio.models.generate_content_stream(
-                model=model, contents=user_content, config=_config(deep, tools_level),
-            )
-        except errors.ClientError as e:
-            if e.code == 404 and not refreshed:
-                # The model was retired or isn't offered to this key: rediscover once.
-                refreshed = True
-                model = await resolve_model(client, refresh=True)
-            elif e.code == 400 and tools_level > 0:
-                # URL context, then Search grounding, may be unavailable on this model or tier.
-                tools_level -= 1
-            else:
-                raise
+    stream, model, tools_level = await _open_stream(client, user_content, deep)
     yield {"type": "status", "text": f"Gemini model: {model}"}
     if tools_level == 0:
         yield {"type": "step", "kind": "error",
