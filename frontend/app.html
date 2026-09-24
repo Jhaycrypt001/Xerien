@@ -19,9 +19,7 @@
     <span class="crumb mono">/ Scout</span>
     <div class="nav-right">
       <span id="status" class="tag"><span class="dot"></span><span>Checking</span></span>
-      <button id="history-toggle" class="icon-btn mobile-only" type="button" aria-label="Open history" aria-expanded="false" aria-controls="sidebar">
-        <span></span><span></span><span></span>
-      </button>
+      <a id="history-link" class="btn btn-ghost btn-sm nav-history hidden" href="/history" aria-label="History"><span class="lbl-lg">History</span><span class="lbl-sm hist-icon" aria-hidden="true"><i></i><i></i><i></i></span></a>
       <button id="signin" class="btn btn-ghost btn-sm hidden" type="button">Connect wallet</button>
       <div id="account" class="acct hidden">
         <button id="acct-btn" class="btn btn-ghost btn-sm mono" type="button" aria-haspopup="menu" aria-expanded="false"><span class="acct-dot"></span><span id="acct-addr"></span></button>
@@ -41,7 +39,7 @@
   <aside id="sidebar" class="sidebar" aria-label="History">
     <div class="sidebar-head">
       <p class="eyebrow muted" style="margin:0">History</p>
-      <button id="history-close" class="icon-close mobile-only" type="button" aria-label="Close history">×</button>
+      <a id="history-all" class="view-all mono hidden" href="/history">View all →</a>
     </div>
     <ul id="history" class="history"></ul>
     <p id="history-empty" class="body small">Your reports will show up here.</p>
@@ -55,6 +53,27 @@
       <h1 class="h-lg">Connect your wallet to use Scout.</h1>
       <p class="lead gate-lead">Your wallet is your account. Your reports are saved to it, and signing in costs nothing.</p>
       <button id="gate-btn" class="btn btn-primary" type="button">Connect wallet</button>
+    </section>
+
+    <!-- History page -->
+    <section id="history-page" class="history-page hidden" aria-labelledby="hp-title">
+      <div class="hp-head">
+        <div>
+          <p class="eyebrow">History</p>
+          <h1 id="hp-title" class="h-lg">Your reports</h1>
+        </div>
+        <button id="hp-new" class="btn btn-primary" type="button">New research</button>
+      </div>
+      <div class="hp-tools">
+        <input id="hp-search" class="hp-search" type="search" placeholder="Search your reports" aria-label="Search your reports" autocomplete="off" />
+        <span id="hp-count" class="mono small"></span>
+      </div>
+      <ul id="hp-list" class="hp-list"></ul>
+      <div id="hp-empty" class="card hp-empty hidden">
+        <p class="body">No reports yet. Your research is saved here automatically.</p>
+        <button id="hp-empty-new" class="btn btn-ghost btn-sm" type="button">Start your first research</button>
+      </div>
+      <p id="hp-nomatch" class="body small hidden">No reports match that search.</p>
     </section>
 
     <!-- Composer -->
@@ -138,7 +157,6 @@
   </main>
 </div>
 
-<div id="drawer-backdrop" class="drawer-backdrop"></div>
 <div id="toast" class="toast hidden" role="status"></div>
 <script src="/static/wallet.js"></script>
 <script src="/static/app.js"></script>

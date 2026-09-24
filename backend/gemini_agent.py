@@ -8,6 +8,8 @@ Citations are attached afterwards from the grounding supports.
 from __future__ import annotations
 
 import os
+import re
+import time
 from typing import Any, AsyncIterator
 
 from google import genai
@@ -15,17 +17,46 @@ from google.genai import errors, types
 
 from .prompts import gemini_system
 
-# Free tier: only the 2.5 models include Google Search grounding.
-MODEL = os.getenv("GEMINI_MODEL", "gemini-2.5-flash")
+# GEMINI_MODEL pins a model. Unset (or "auto"), the newest stable Flash model this key
+# can use is discovered from the API, since Google retires and gates model ids over time.
+MODEL = os.getenv("GEMINI_MODEL", "auto")
+_FLASH = re.compile(r"^gemini-(\d+(?:\.\d+)?)-flash$")
+_resolved: dict[str, Any] = {"model": None, "at": 0.0}
 
 
-def _config(deep: bool, with_url_context: bool) -> types.GenerateContentConfig:
-    tools = [types.Tool(google_search=types.GoogleSearch())]
-    if with_url_context:
+async def resolve_model(client: genai.Client, refresh: bool = False) -> str:
+    if MODEL != "auto":
+        return MODEL
+    if _resolved["model"] and not refresh and time.time() - _resolved["at"] < 6 * 3600:
+        return _resolved["model"]
+    names = []
+    async for m in await client.aio.models.list():
+        if "generateContent" in (m.supported_actions or []):
+            names.append((m.name or "").removeprefix("models/"))
+    stable = sorted((float(v.group(1)), n) for n in names if (v := _FLASH.match(n)))
+    if stable:
+        choice = stable[-1][1]
+    elif "gemini-flash-latest" in names:
+        choice = "gemini-flash-latest"
+    else:
+        flashes = [n for n in names if "flash" in n and not any(x in n for x in ("lite", "live", "image", "tts", "audio"))]
+        if not flashes:
+            raise RuntimeError("No Gemini Flash model is available for this API key")
+        choice = sorted(flashes)[-1]
+    _resolved.update(model=choice, at=time.time())
+    return choice
+
+
+def _config(deep: bool, tools_level: int) -> types.GenerateContentConfig:
+    """tools_level 2: Search + URL context, 1: Search only, 0: no web tools."""
+    tools = []
+    if tools_level >= 1:
+        tools.append(types.Tool(google_search=types.GoogleSearch()))
+    if tools_level >= 2:
         tools.append(types.Tool(url_context=types.UrlContext()))
     return types.GenerateContentConfig(
         system_instruction=gemini_system(deep),
-        tools=tools,
+        tools=tools or None,
         thinking_config=types.ThinkingConfig(include_thoughts=True),
         max_output_tokens=16384,
     )
@@ -56,17 +87,27 @@ async def run(user_content: str, depth: str) -> AsyncIterator[dict[str, Any]]:
     client = genai.Client(api_key=os.environ["GEMINI_API_KEY"])
     deep = depth == "deep"
 
-    try:
-        stream = await client.aio.models.generate_content_stream(
-            model=MODEL, contents=user_content, config=_config(deep, with_url_context=True),
-        )
-    except errors.ClientError as e:
-        if e.code != 400:
-            raise
-        # URL context isn't available for every model or tier; search alone still works.
-        stream = await client.aio.models.generate_content_stream(
-            model=MODEL, contents=user_content, config=_config(deep, with_url_context=False),
-        )
+    model = await resolve_model(client)
+    stream, tools_level, refreshed = None, 2, False
+    while stream is None:
+        try:
+            stream = await client.aio.models.generate_content_stream(
+                model=model, contents=user_content, config=_config(deep, tools_level),
+            )
+        except errors.ClientError as e:
+            if e.code == 404 and not refreshed:
+                # The model was retired or isn't offered to this key: rediscover once.
+                refreshed = True
+                model = await resolve_model(client, refresh=True)
+            elif e.code == 400 and tools_level > 0:
+                # URL context, then Search grounding, may be unavailable on this model or tier.
+                tools_level -= 1
+            else:
+                raise
+    yield {"type": "status", "text": f"Gemini model: {model}"}
+    if tools_level == 0:
+        yield {"type": "step", "kind": "error",
+               "label": "Web search isn't available for this Gemini key; using market data and model knowledge only"}
 
     text, thought = "", ""
     queries: set[str] = set()
@@ -136,4 +177,4 @@ async def run(user_content: str, depth: str) -> AsyncIterator[dict[str, Any]]:
     cited = add_citations(text, grounding)
     if cited != text:
         yield {"type": "report", "text": cited}
-    yield {"type": "done", "model": MODEL, "usage": usage}
+    yield {"type": "done", "model": model, "usage": usage}

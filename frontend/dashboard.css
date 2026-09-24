@@ -1,7 +1,6 @@
 .wrap.wide { max-width: 1440px; }
 .crumb { color: var(--stone); font-size: 13px; margin-left: -20px; }
 .small { font-size: 12px; color: var(--stone); }
-.mobile-only { display: none; }
 
 .dash { display: grid; grid-template-columns: 248px minmax(0, 1fr); gap: 32px; padding-top: 24px; padding-bottom: 64px; }
 
@@ -106,15 +105,31 @@
 
 /* ---------- nav controls ---------- */
 .lbl-sm { display: none; }
-.icon-btn {
-  width: 32px; height: 32px; border: 0; border-radius: var(--r); background: transparent; box-shadow: var(--ring-2);
-  display: none; flex-direction: column; justify-content: center; align-items: center; gap: 3px; padding: 0; flex: none;
-}
-.icon-btn span { width: 14px; height: 1.5px; background: var(--obsidian); }
+.nav-history.active { box-shadow: 0 0 0 1px var(--obsidian); color: var(--obsidian); background: var(--white); }
+.hist-icon { flex-direction: column; gap: 3px; }
+.hist-icon i { display: block; width: 14px; height: 1.5px; background: currentColor; }
 .sidebar-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; }
-.icon-close { border: 0; background: transparent; font-size: 24px; line-height: 1; color: var(--stone); padding: 0 4px; display: none; }
-.drawer-backdrop { display: none; }
+.view-all { font-size: 11px; color: var(--stone); text-decoration: none; }
+.view-all:hover { color: var(--obsidian); }
 .nav-right { min-width: 0; }
+
+/* ---------- history page ---------- */
+.history-page { max-width: 880px; padding-top: 48px; }
+.hp-head { display: flex; justify-content: space-between; align-items: flex-end; gap: 16px; flex-wrap: wrap; margin-bottom: 24px; }
+.hp-tools { display: flex; align-items: center; gap: 12px; margin-bottom: 16px; }
+.hp-search {
+  flex: 1; min-width: 0; height: 40px; padding: 0 12px; border: 0; border-radius: var(--r); background: var(--white);
+  box-shadow: var(--ring-2); font: 400 14px var(--sans); color: var(--obsidian); outline: 0;
+}
+.hp-search:focus { box-shadow: 0 0 0 1px var(--obsidian); }
+.hp-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
+.hp-item { display: flex; align-items: center; gap: 16px; padding: 14px 16px; }
+.hp-open { flex: 1; min-width: 0; display: grid; gap: 4px; text-decoration: none; color: var(--obsidian); }
+.hp-open:hover .hp-q { text-decoration: underline; text-decoration-color: var(--ash); text-underline-offset: 3px; }
+.hp-q { font-size: 15px; line-height: 1.4; overflow-wrap: anywhere; }
+.hp-meta { font-size: 11px; letter-spacing: .071em; text-transform: uppercase; color: var(--graphite); }
+.hp-actions { display: flex; gap: 6px; flex: none; }
+.hp-empty { display: grid; gap: 12px; justify-items: start; padding: 24px; }
 
 /* ---------- responsive ---------- */
 @media (max-width: 1100px) {
@@ -127,15 +142,8 @@
 }
 @media (max-width: 860px) {
   .dash { grid-template-columns: 1fr; gap: 0; padding-top: 8px; }
-  .mobile-only { display: inline-flex; }
-  .sidebar {
-    position: fixed; top: 0; bottom: 0; left: 0; z-index: 60; width: min(320px, 86vw); max-height: none; align-self: stretch; height: 100dvh;
-    padding: 20px 16px; background: var(--paper); box-shadow: 1px 0 0 var(--hairline), 12px 0 32px rgba(0, 0, 0, .08);
-    transform: translateX(-102%); transition: transform .22s ease; overflow-y: auto; visibility: hidden;
-  }
-  body.show-history .sidebar { transform: none; visibility: visible; }
-  body.show-history .drawer-backdrop { display: block; position: fixed; inset: 0; z-index: 55; background: rgba(23, 23, 23, .28); }
-  body.show-history { overflow: hidden; }
+  .sidebar { display: none; }
+  .history-page { padding-top: 24px; }
   .composer { padding-top: 32px; }
   .report-card { padding: 20px; }
   .hint { display: none; }
@@ -149,6 +157,11 @@
   .nav-right { gap: 6px; }
   .lbl-lg { display: none; }
   .lbl-sm { display: inline; }
+  .hist-icon { display: inline-flex; }
+  .nav-history { width: 32px; padding: 0; }
+  .hp-item { flex-direction: column; align-items: stretch; gap: 12px; }
+  .hp-actions .btn { flex: 1; }
+  .hp-head .btn { width: 100%; }
   .ask-row { gap: 8px; }
   #scan { flex: 1 1 auto; }
   #go { flex: 1 1 100%; margin-left: 0; height: 44px; }

@@ -30,7 +30,7 @@ def model_name() -> str | None:
     if p == "anthropic":
         return os.getenv("CLAUDE_MODEL", "claude-opus-5")
     if p == "gemini":
-        return os.getenv("GEMINI_MODEL", "gemini-2.5-flash")
+        return os.getenv("GEMINI_MODEL") or "Gemini (auto: newest Flash)"
     return None
 
 
