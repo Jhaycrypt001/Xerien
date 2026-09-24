@@ -95,6 +95,13 @@ uvicorn backend.app:app --reload
 
 With Claude, your Anthropic organization needs **web search** enabled in the Claude Console. With Gemini, nothing extra is needed.
 
+## Deploy (Railway)
+
+1. On railway.com, choose New Project → Deploy from GitHub repo and select `Jhaycrypt001/Xerien` (branch `Main`). `railway.json` builds the Dockerfile and health-checks `/api/health`.
+2. In the service's **Variables** tab, add `GEMINI_API_KEY` (or `ANTHROPIC_API_KEY`), and optionally `MORALIS_API_KEY` and `SOLANA_RPC_URL`.
+3. Under **Settings → Networking**, click **Generate Domain** to get a public HTTPS URL.
+4. To keep history across deploys, right-click the service → **Attach volume**, mount it at `/data`, and add the variable `DATA_DIR=/data`.
+
 ## Deploy (Render)
 
 1. On render.com, choose New → Blueprint and select this repository. `render.yaml` configures the service.
