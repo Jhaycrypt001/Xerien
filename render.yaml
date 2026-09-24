@@ -12,3 +12,6 @@ services:
         sync: false
       - key: ANTHROPIC_API_KEY
         sync: false
+      # Optional: adds BNB Chain and Avalanche to wallet scans (free key at moralis.com)
+      - key: MORALIS_API_KEY
+        sync: false

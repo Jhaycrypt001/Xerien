@@ -15,7 +15,7 @@ Every report has the same structure: TL;DR, Key Findings (each with a citation),
 General research agents (ChatGPT, Gemini and Perplexity deep research) start from web search alone. Crypto research tools (Messari Copilot, Nansen) start from their own proprietary data. Scout combines both for free:
 
 - **Live market data comes first.** Tokens (`$SOL`, `ETH`, contract addresses) and protocols (`Jupiter`, `Aave`) named in the question are looked up on DexScreener and DefiLlama *before* the model runs. The model receives the numbers as data and checks them against the news.
-- **Multi-chain wallet scan.** The signed-in wallet's holdings are read, priced and researched position by position: Solana through RPC, and Ethereum, Base, Arbitrum, Optimism and Polygon through Blockscout's free public API. Unpriced tokens (usually spam airdrops) are skipped.
+- **Multi-chain wallet scan.** The signed-in wallet's holdings are read, priced and researched position by position: Solana through RPC, Ethereum, Base, Arbitrum, Optimism and Polygon through Blockscout's free public API, and BNB Chain and Avalanche through Moralis when `MORALIS_API_KEY` is set. Unpriced tokens (usually spam airdrops) are skipped.
 - **Any chain for research.** Market lookups cover every chain DexScreener and DefiLlama track, and EVM sign-in works with any EVM wallet.
 - **You see how it worked.** Every data pull, search and page read appears in the trace, and the report scores its own confidence.
 
@@ -61,7 +61,7 @@ Browser ──POST /api/research (session cookie)──▶ FastAPI ──stream�
 | File | Role |
 |---|---|
 | `backend/agent.py` | Orchestrator: wallet holdings and market data first, then the chosen provider |
-| `backend/market.py` | DexScreener, DefiLlama, Blockscout and Solana RPC lookups, sanitized before they reach the model |
+| `backend/market.py` | DexScreener, DefiLlama, Blockscout, Moralis and Solana RPC lookups, sanitized before they reach the model |
 | `backend/claude_agent.py` | Claude provider: server-side web tools, `pause_turn` handling, and a one-time fallback to the standard tool versions |
 | `backend/gemini_agent.py` | Gemini provider: Google Search grounding with citations inserted at the grounded sentences |
 | `backend/prompts.py` | Shared report format and research instructions |
@@ -112,6 +112,7 @@ Docker: `docker build -t scout . && docker run -p 8000:8000 -e ANTHROPIC_API_KEY
 | `LLM_PROVIDER` | `auto` | `auto`, `gemini` or `anthropic` |
 | `GEMINI_MODEL` | `gemini-2.5-flash` | Gemini model id |
 | `CLAUDE_MODEL` | `claude-opus-5` | Claude model id |
+| `MORALIS_API_KEY` | none | Adds BNB Chain and Avalanche to wallet scans (free tier at moralis.com) |
 | `SOLANA_RPC_URL` | public mainnet RPC | Use a dedicated RPC (Helius, Triton, etc.) for reliable wallet scans |
 | `CLAUDE_FALLBACKS` | `1` | Server-side refusal fallback (set `0` to turn off) |
 | `DATA_DIR` | `./data` | SQLite location |
@@ -135,4 +136,4 @@ Docker: `docker build -t scout . && docker run -p 8000:8000 -e ANTHROPIC_API_KEY
 
 SSE event types: `status`, `market`, `holdings`, `thinking`, `tool_pending`, `step`, `sources`, `fetched`, `token`, `report`, `done`, `saved`, `error`.
 
-`POST /api/research` also accepts `"scan_wallet": true`, which researches the signed-in wallet's holdings (Solana, or EVM across Ethereum, Base, Arbitrum, Optimism and Polygon).
+`POST /api/research` also accepts `"scan_wallet": true`, which researches the signed-in wallet's holdings (Solana, or EVM across Ethereum, Base, Arbitrum, Optimism, Polygon, and BNB Chain and Avalanche when Moralis is configured).

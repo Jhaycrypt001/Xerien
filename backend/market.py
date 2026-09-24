@@ -3,7 +3,8 @@
 - Tokens: $TICKERs, bare tickers and contract addresses in the question -> DexScreener
 - Protocols: protocol names in the question -> DefiLlama TVL
 - Wallet scan: Solana holdings via JSON-RPC; EVM holdings on Ethereum, Base, Arbitrum,
-  Optimism and Polygon via Blockscout; liquidity from DexScreener
+  Optimism and Polygon via Blockscout, plus BNB Chain and Avalanche via Moralis;
+  liquidity from DexScreener
 
 Every lookup is best-effort: a failing source is skipped, never fatal. All values that
 reach the model are sanitized and wrapped as untrusted data.
@@ -35,6 +36,9 @@ EVM_CHAINS = {
     "optimism": ("https://optimism.blockscout.com", "ETH"),
     "polygon": ("https://polygon.blockscout.com", "POL"),
 }
+# Chains without a free keyless explorer API: scanned through Moralis when MORALIS_API_KEY is set.
+MORALIS = "https://deep-index.moralis.io/api/v2.2"
+MORALIS_CHAINS = ("bsc", "avalanche")  # same ids in Moralis and DexScreener
 
 TIMEOUT = httpx.Timeout(6.0, connect=4.0)
 MAX_TOKENS = 5
@@ -274,17 +278,46 @@ async def _evm_chain(client: httpx.AsyncClient, chain: str, address: str) -> lis
     return [{**h, "chain": chain} for h in out if h["amount"] * h["price"] >= 1]
 
 
+async def _moralis_chain(client: httpx.AsyncClient, chain: str, address: str, key: str) -> list[dict[str, Any]]:
+    r = await client.get(
+        f"{MORALIS}/wallets/{address}/tokens",
+        params={"chain": chain, "exclude_spam": "true"},
+        headers={"X-API-Key": key, "Accept": "application/json"},
+    )
+    r.raise_for_status()
+    out = []
+    for t in r.json().get("result") or []:
+        price, amount = _num(t.get("usd_price")), _num(t.get("balance_formatted"))
+        addr = t.get("token_address") or ""
+        if t.get("possible_spam") or not price or not amount:
+            continue
+        native = bool(t.get("native_token"))
+        if not native and not _EVM_ADDR.fullmatch(addr):
+            continue
+        out.append({"symbol": _clean(t.get("symbol"), 16), "name": "native" if native else _clean(t.get("name")),
+                    "address": None if native else addr, "amount": amount, "price": price, "chain": chain})
+    return [h for h in out if h["amount"] * h["price"] >= 1]
+
+
+def evm_chains() -> list[str]:
+    return list(EVM_CHAINS) + (list(MORALIS_CHAINS) if os.getenv("MORALIS_API_KEY") else [])
+
+
 async def evm_holdings(address: str) -> dict[str, Any]:
-    """Priced holdings of an EVM wallet across the chains in EVM_CHAINS, largest first."""
+    """Priced holdings of an EVM wallet across every supported chain, largest first."""
+    moralis_key = os.getenv("MORALIS_API_KEY")
     async with httpx.AsyncClient(timeout=TIMEOUT, headers={"User-Agent": "XerienScout/1.0"}) as client:
-        per_chain = await asyncio.gather(*[_evm_chain(client, c, address) for c in EVM_CHAINS], return_exceptions=True)
+        jobs = [_evm_chain(client, c, address) for c in EVM_CHAINS]
+        if moralis_key:
+            jobs += [_moralis_chain(client, c, address, moralis_key) for c in MORALIS_CHAINS]
+        per_chain = await asyncio.gather(*jobs, return_exceptions=True)
         raw = [h for res in per_chain if isinstance(res, list) for h in res]
         if not raw and all(isinstance(r, Exception) for r in per_chain):
             raise RuntimeError("No chain explorer responded")
 
         # Add liquidity and 24h change from DexScreener for ERC-20s (30 addresses per call).
         pairs: list[dict[str, Any]] = []
-        for chain in EVM_CHAINS:
+        for chain in evm_chains():
             addrs = [h["address"] for h in raw if h["chain"] == chain and h["address"]][:30]
             if addrs:
                 try:
