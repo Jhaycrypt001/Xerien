@@ -110,7 +110,6 @@ button { font: inherit; cursor: pointer; color: inherit; }
 .cli-line.err .g, .cli-line.err .k, .cli-line.err .v { color: var(--red); }
 
 @keyframes blink { 50% { opacity: 0; } }
-.caret::after { content: "▍"; animation: blink 1s steps(1) infinite; color: var(--obsidian); }
 
 /* ---------- wallet modal ---------- */
 .wm-backdrop {

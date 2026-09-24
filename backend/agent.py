@@ -1,177 +1,73 @@
-"""Xerien Scout - the research agent loop.
-
-Claude plans, searches the web, reads sources and writes a cited report.
-Every step is yielded as a small JSON-able event so the UI can render the
-agent's reasoning live.
-"""
+"""Research orchestrator: gathers live market data, then streams the chosen model provider."""
 
 from __future__ import annotations
 
 import os
-from datetime import date
 from typing import Any, AsyncIterator
 
-import anthropic
+from . import market
 
-MODEL = os.getenv("CLAUDE_MODEL", "claude-opus-5")
-MAX_CONTINUATIONS = 6  # pause_turn resumes (server tool loop hit its limit)
-USE_FALLBACKS = os.getenv("CLAUDE_FALLBACKS", "1") != "0"
-
-DEPTHS = {
-    # depth: (effort, max web searches, max page reads)
-    "quick": ("medium", 4, 3),
-    "deep": ("high", 10, 8),
-}
-
-SYSTEM_PROMPT = """You are Xerien Scout, an autonomous research agent.
-
-Today's date is {today}.
-
-Work like a world-class analyst:
-1. Briefly state your research plan (2-4 short bullets) before your first search.
-2. Search the web from several angles. Prefer primary and recent sources.
-   Read the most promising pages in full with web_fetch when snippets are not enough.
-3. Between tool calls, write one short sentence about what you learned and what you'll check next.
-4. When you have enough evidence, write the final report in Markdown with exactly these sections:
-
-## TL;DR
-Two or three sentences with the direct answer.
-
-## Key Findings
-Bullet points. Every factual claim cites its source inline as a Markdown link.
-
-## Analysis
-Connect the evidence, compare viewpoints, and call out conflicting sources.
-
-## Risks & Unknowns
-What is uncertain, disputed, or missing.
-
-## Confidence
-One line: `Confidence: NN/100` followed by a one-sentence justification.
-
-## Follow-up Questions
-Exactly three bullet points, each a sharp follow-up question the user could research next.
-
-Never invent sources or numbers. If evidence is thin, say so."""
+WALLET_SCAN_QUESTION = (
+    "Review the tokens in my wallet. For each meaningful holding, what are the main risks "
+    "(liquidity, concentration, recent news, unlocks, security incidents), and what should I watch next?"
+)
 
 
-def _tools(max_searches: int, max_fetches: int) -> list[dict[str, Any]]:
-    return [
-        {"type": "web_search_20260209", "name": "web_search", "max_uses": max_searches},
-        {"type": "web_fetch_20260209", "name": "web_fetch", "max_uses": max_fetches},
-    ]
+def provider() -> str | None:
+    """'anthropic' or 'gemini', from LLM_PROVIDER or whichever API key is set."""
+    choice = os.getenv("LLM_PROVIDER", "auto").lower()
+    has_claude = bool(os.getenv("ANTHROPIC_API_KEY") or os.getenv("ANTHROPIC_AUTH_TOKEN"))
+    has_gemini = bool(os.getenv("GEMINI_API_KEY"))
+    if choice == "anthropic":
+        return "anthropic" if has_claude else None
+    if choice == "gemini":
+        return "gemini" if has_gemini else None
+    return "anthropic" if has_claude else "gemini" if has_gemini else None
 
 
-def _block_event(block: Any) -> dict[str, Any] | None:
-    """Translate a completed content block into a UI step event."""
-    btype = block.type
-
-    if btype == "server_tool_use":
-        data = block.input if isinstance(block.input, dict) else {}
-        if block.name == "web_search":
-            return {"type": "step", "kind": "search", "label": data.get("query", "")}
-        if block.name == "web_fetch":
-            return {"type": "step", "kind": "read", "label": data.get("url", "")}
-        return {"type": "step", "kind": "analyze", "label": "Crunching the results"}
-
-    if btype == "web_search_tool_result":
-        content = block.content
-        if isinstance(content, list):
-            sources = [
-                {"title": r.title, "url": r.url}
-                for r in content
-                if getattr(r, "type", "") == "web_search_result"
-            ]
-            return {"type": "sources", "sources": sources}
-        return {"type": "step", "kind": "error", "label": f"Search failed: {getattr(content, 'error_code', 'unknown')}"}
-
-    if btype == "web_fetch_tool_result":
-        content = block.content
-        if getattr(content, "type", "") == "web_fetch_result":
-            doc = getattr(content, "content", None)
-            title = getattr(doc, "title", None) or content.url
-            return {"type": "fetched", "title": title, "url": content.url}
-        return {"type": "step", "kind": "error", "label": f"Couldn't read page: {getattr(content, 'error_code', 'unknown')}"}
-
-    if btype == "thinking":
-        text = (getattr(block, "thinking", "") or "").strip()
-        if text:
-            return {"type": "thinking", "text": text}
-
+def model_name() -> str | None:
+    p = provider()
+    if p == "anthropic":
+        return os.getenv("CLAUDE_MODEL", "claude-opus-5")
+    if p == "gemini":
+        return os.getenv("GEMINI_MODEL", "gemini-2.5-flash")
     return None
 
 
-async def run_research(question: str, depth: str = "quick") -> AsyncIterator[dict[str, Any]]:
-    effort, max_searches, max_fetches = DEPTHS.get(depth, DEPTHS["quick"])
-    client = anthropic.AsyncAnthropic()
+async def run_research(
+    question: str, depth: str = "quick", *, wallet: str | None = None,
+) -> AsyncIterator[dict[str, Any]]:
+    p = provider()
+    yield {"type": "status", "text": f"Scout deployed on {model_name()} ({depth} mode)"}
 
-    messages: list[dict[str, Any]] = [{"role": "user", "content": question}]
-    request: dict[str, Any] = {
-        "model": MODEL,
-        "max_tokens": 64000,
-        "system": SYSTEM_PROMPT.format(today=date.today().isoformat()),
-        "thinking": {"type": "adaptive", "display": "summarized"},
-        "output_config": {"effort": effort},
-        "tools": _tools(max_searches, max_fetches),
-    }
-    if USE_FALLBACKS:
-        # Server-side refusal fallback: a declined request is re-run on a fallback model.
-        request["betas"] = ["server-side-fallback-2026-07-01"]
-        request["fallbacks"] = "default"
-
-    yield {"type": "status", "text": f"Scout deployed on {MODEL} ({depth} mode)"}
-
-    usage = {"input": 0, "output": 0, "searches": 0, "fetches": 0}
-    compat = False
-    for _ in range(MAX_CONTINUATIONS):
-        stream_cm = client.beta.messages.stream(messages=messages, **request)
+    holdings = None
+    if wallet:
         try:
-            stream = await stream_cm.__aenter__()
-        except anthropic.BadRequestError:
-            # Some orgs/models lack the refusal-fallback beta or the newest web tool
-            # versions. Retry once, before any output, with the widely available set.
-            if compat:
-                raise
-            compat = True
-            request.pop("fallbacks", None)
-            request["betas"] = ["web-fetch-2025-09-10"]
-            request["tools"] = [
-                {"type": "web_search_20250305", "name": "web_search", "max_uses": max_searches},
-                {"type": "web_fetch_20250910", "name": "web_fetch", "max_uses": max_fetches},
-            ]
-            stream_cm = client.beta.messages.stream(messages=messages, **request)
-            stream = await stream_cm.__aenter__()
-        try:
-            async for event in stream:
-                if event.type == "content_block_delta" and event.delta.type == "text_delta":
-                    yield {"type": "token", "text": event.delta.text}
-                elif event.type == "content_block_start" and event.content_block.type == "server_tool_use":
-                    yield {"type": "tool_pending", "tool": event.content_block.name}
-                elif event.type == "content_block_stop":
-                    step = _block_event(event.content_block)
-                    if step:
-                        yield step
-            response = await stream.get_final_message()
-        finally:
-            await stream_cm.__aexit__(None, None, None)
+            holdings = await market.solana_holdings(wallet)
+            count = len(holdings["items"])
+            yield {"type": "holdings", **holdings}
+            yield {"type": "step", "kind": "market",
+                   "label": f"Wallet: {count} priced holdings, {market.usd(holdings['totalUsd'])} total"}
+        except Exception:  # noqa: BLE001 - research continues without holdings
+            yield {"type": "step", "kind": "error", "label": "Couldn't read wallet holdings from Solana RPC"}
 
-        usage["input"] += response.usage.input_tokens
-        usage["output"] += response.usage.output_tokens
-        stu = getattr(response.usage, "server_tool_use", None)
-        if stu:
-            usage["searches"] += getattr(stu, "web_search_requests", 0) or 0
-            usage["fetches"] += getattr(stu, "web_fetch_requests", 0) or 0
+    try:
+        items = await market.snapshot(question)
+    except Exception:  # noqa: BLE001 - research continues without market data
+        items = []
+    if items:
+        yield {"type": "market", "items": items}
+        for m in items:
+            label = (f"{m['symbol']} {market.usd(m['priceUsd'])} · liquidity {market.usd(m['liquidityUsd'])}"
+                     if m["kind"] == "token" else f"{m['name']} TVL {market.usd(m['tvl'])}")
+            yield {"type": "step", "kind": "market", "label": label}
 
-        if response.stop_reason == "pause_turn":
-            # Server-side tool loop hit its iteration cap; resend and it resumes.
-            messages.append({"role": "assistant", "content": response.content})
-            continue
+    context = market.as_context(items, holdings)
+    user_content = f"{question}\n\n{context}" if context else question
 
-        if response.stop_reason == "refusal":
-            yield {"type": "error", "text": "The model declined this request. Try rephrasing it."}
-            return
-        if response.stop_reason == "max_tokens":
-            yield {"type": "status", "text": "Report hit the length limit and may be cut short."}
-        break
-
-    yield {"type": "done", "model": response.model, "usage": usage}
+    if p == "anthropic":
+        from . import claude_agent as impl
+    else:
+        from . import gemini_agent as impl
+    async for event in impl.run(user_content, depth):
+        yield event

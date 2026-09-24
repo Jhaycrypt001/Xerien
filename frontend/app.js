@@ -4,7 +4,7 @@ const traceEl = $("#trace"), sourcesEl = $("#sources"), report = $("#report");
 
 const KIND = {
   status: ["·", "Agent", "muted"], note: ["·", "Note", "muted"], thinking: ["·", "Think", "muted"],
-  search: ["◆", "Search", ""], read: ["◆", "Read", ""], analyze: ["◆", "Analyze", ""],
+  search: ["◆", "Search", ""], read: ["◆", "Read", ""], analyze: ["◆", "Analyze", ""], market: ["◆", "Data", ""],
   fetched: ["✓", "Read", "ok"], done: ["✓", "Done", "ok"], error: ["×", "Error", "err"],
 };
 
@@ -18,7 +18,7 @@ api("/api/health").then((r) => r.json()).then((h) => {
   const s = $("#status");
   s.className = "tag " + (h.configured ? "ok" : "bad");
   s.lastElementChild.textContent = h.configured ? "Online" : "Not configured";
-  s.title = h.configured ? `Model: ${h.model}` : "The server has no ANTHROPIC_API_KEY";
+  s.title = h.configured ? `${h.provider === "gemini" ? "Gemini" : "Claude"} · ${h.model}` : "The server has no model API key";
 }).catch(() => {});
 
 XerienWallet.me().then((m) => { setAccount(m); route(); });
@@ -40,6 +40,7 @@ function setAccount(m) {
     $("#acct-full").textContent = m.address;
     $("#acct-chain").textContent = m.chain === "solana" ? "Solana wallet" : "EVM wallet";
   }
+  $("#scan").classList.toggle("hidden", !(m && m.chain === "solana"));
   $("#history-locked").classList.toggle("hidden", Boolean(m));
   if (m) loadHistory(); else { $("#history").innerHTML = ""; $("#history-empty").classList.add("hidden"); }
 }
@@ -89,6 +90,10 @@ form.addEventListener("submit", (e) => {
   if (question.length < 3 || state?.running) return;
   runResearch(question, new FormData(form).get("depth"));
 });
+$("#scan").onclick = () => {
+  if (state?.running) return;
+  runResearch(q.value.trim(), new FormData(form).get("depth"), true);
+};
 $("#new").onclick = async () => {
   if (state?.running) return;
   if (!account && !(await signIn())) return;
@@ -118,6 +123,8 @@ function resetRun(question, meta) {
   $("#src-n").textContent = "0";
   $("#error").classList.add("hidden");
   $("#confidence").classList.add("hidden");
+  $("#market").classList.add("hidden"); $("#market-list").innerHTML = "";
+  $("#holdings").classList.add("hidden"); $("#hold-list").innerHTML = "";
   $("#delete").classList.add("hidden");
   setActions(false);
   updateStats("0.0s");
@@ -125,15 +132,15 @@ function resetRun(question, meta) {
   window.scrollTo({ top: 0 });
 }
 
-async function runResearch(question, depth) {
-  resetRun(question, `${depth} research · running`);
+async function runResearch(question, depth, scanWallet = false) {
+  resetRun(question || "Wallet scan: risks in my holdings", `${depth} ${scanWallet ? "wallet scan" : "research"} · running`);
   state.running = true;
   go.disabled = true; $("#new").disabled = true;
   state.timer = setInterval(() => updateStats(elapsed()), 100);
   try {
     const res = await api("/api/research", {
       method: "POST", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ question, depth }),
+      body: JSON.stringify({ question, depth, scan_wallet: scanWallet }),
     });
     if (res.status === 401) { setAccount(null); throw new Error("Your session expired. Connect your wallet again."); }
     if (!res.ok) {
@@ -214,7 +221,10 @@ function onEvent(ev, replay = false) {
       state.pending = null;
       if (!replay) updateStats(elapsed());
       break;
-    case "sources": ev.sources.forEach((s) => addSource(s.url, s.title)); break;
+    case "sources": ev.sources.forEach((s) => addSource(s.url, s.title, false, s.domain)); break;
+    case "market": renderMarket(ev.items, replay); break;
+    case "holdings": renderHoldings(ev); break;
+    case "report": state.buffer = ev.text; scheduleRender(); break;
     case "fetched": addSource(ev.url, ev.title, true); break;
     case "error":
       if (state.pending) { resolve(state.pending, "error", ev.text); state.pending = null; }
@@ -251,14 +261,14 @@ function resolve(el, kind, text) {
   el.children[0].textContent = glyph; el.children[1].textContent = label; el.children[2].textContent = text;
 }
 
-function addSource(url, title, read = false) {
-  if (!url) return;
+function addSource(url, title, read = false, domain = "") {
+  if (!/^https?:\/\//i.test(url || "")) return;
   const found = state.sources.get(url);
   if (found) { if (read) markRead(found); return; }
   const li = document.createElement("li");
   li.innerHTML = `<a target="_blank" rel="noopener"><span class="host"></span><span class="t"></span></a>`;
   const a = li.firstElementChild; a.href = url; a.title = title ? `${title}\n${url}` : url;
-  a.querySelector(".host").textContent = hostOf(url);
+  a.querySelector(".host").textContent = domain || hostOf(url);
   a.querySelector(".t").textContent = title || url;
   if (read) markRead(li);
   sourcesEl.appendChild(li);
@@ -269,6 +279,49 @@ function markRead(li) {
   if (li.querySelector(".badge")) return;
   li.firstElementChild.insertAdjacentHTML("beforeend", `<span class="badge">READ</span>`);
   sourcesEl.prepend(li);
+}
+
+/* ---------- market data ---------- */
+function dataRow(rawUrl, name, tag, value, sub, change) {
+  const url = /^https:\/\//.test(rawUrl || "") ? rawUrl : null;
+  const li = document.createElement("li");
+  const el = document.createElement(url ? "a" : "div");
+  el.className = "data-row";
+  if (url) { el.href = url; el.target = "_blank"; el.rel = "noopener noreferrer"; }
+  el.innerHTML = `<span class="data-name"></span><span class="data-val"></span><span class="data-sub"></span>`;
+  const n = el.children[0]; n.textContent = name;
+  if (tag) { const t = document.createElement("small"); t.textContent = tag; n.appendChild(t); }
+  el.children[1].textContent = value;
+  if (change != null) {
+    const c = document.createElement("span");
+    c.className = change >= 0 ? "up" : "down";
+    c.textContent = ` ${change >= 0 ? "+" : "−"}${Math.abs(change).toFixed(1)}%`;
+    el.children[1].appendChild(c);
+  }
+  el.children[2].textContent = sub;
+  li.appendChild(el);
+  return li;
+}
+function renderMarket(items, replay = false) {
+  const ul = $("#market-list"); ul.innerHTML = "";
+  items.forEach((m) => {
+    if (m.kind === "token") {
+      const age = m.pairAgeDays != null ? ` · ${m.pairAgeDays}d old` : "";
+      ul.appendChild(dataRow(m.url, m.symbol, m.chain, usd(m.priceUsd), `Liq ${usd(m.liquidityUsd)} · Vol ${usd(m.volume24h)} · FDV ${usd(m.fdv)}${age}`, m.change24h));
+    } else {
+      ul.appendChild(dataRow(m.url, m.name, m.category, usd(m.tvl), `TVL · 7d ${m.change7d != null ? m.change7d.toFixed(1) + "%" : "n/a"} · ${m.chains.join(", ")}`, m.change1d));
+    }
+  });
+  $("#market-time").textContent = replay ? "at run time" : "live";
+  $("#market").classList.toggle("hidden", !items.length);
+}
+function renderHoldings(h) {
+  const ul = $("#hold-list"); ul.innerHTML = "";
+  (h.items || []).forEach((x) =>
+    ul.appendChild(dataRow(x.url, x.symbol, x.name, usd(x.valueUsd), `${fmtAmount(x.amount)} · Liq ${usd(x.liquidityUsd)}`, x.change24h))
+  );
+  $("#hold-total").textContent = usd(h.totalUsd);
+  $("#holdings").classList.remove("hidden");
 }
 
 /* ---------- report rendering ---------- */
@@ -377,4 +430,13 @@ function clip(s, n) { return s.length > n ? s.slice(0, n - 1) + "…" : s; }
 function hostOf(u) { try { return new URL(u).hostname.replace(/^www\./, ""); } catch { return ""; } }
 function prettyUrl(u) { try { const x = new URL(u); return x.hostname.replace(/^www\./, "") + x.pathname.replace(/\/$/, ""); } catch { return u; } }
 function fmtDate(ts) { return new Date(ts * 1000).toLocaleDateString(undefined, { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" }); }
+function usd(v) {
+  if (v == null || !Number.isFinite(v)) return "n/a";
+  const a = Math.abs(v);
+  if (a >= 1e9) return `$${(v / 1e9).toFixed(2)}B`;
+  if (a >= 1e6) return `$${(v / 1e6).toFixed(2)}M`;
+  if (a >= 1e3) return `$${(v / 1e3).toFixed(1)}K`;
+  return a < 1 ? `$${v.toPrecision(3)}` : `$${v.toFixed(2)}`;
+}
+function fmtAmount(n) { return n >= 1000 ? Math.round(n).toLocaleString() : n.toPrecision(4); }
 function slug(s) { return s.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 60) || "report"; }

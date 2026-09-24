@@ -9,8 +9,7 @@
 .grid-2 { display: grid; grid-template-columns: repeat(2, 1fr); gap: 16px; }
 .step { padding: 24px; display: grid; gap: 12px; align-content: start; }
 .step-n { font-size: 12px; color: var(--stone); }
-.feature { padding: 24px; display: grid; gap: 12px; align-content: start; min-height: 220px; }
-.feature .cli.mini { margin-top: 12px; }
+.feature { padding: 24px; display: grid; gap: 12px; align-content: start; }
 .btn.invert { color: #fff; box-shadow: 0 0 0 1px #4d4d4d; justify-self: start; margin-top: 8px; }
 .btn.invert:hover { background: #262626; color: #fff; }
 

@@ -64,6 +64,7 @@
             <label><input type="radio" name="depth" value="deep" /><span>Deep</span></label>
           </div>
           <span class="hint mono">⏎ to run · ⇧⏎ new line</span>
+          <button id="scan" class="btn btn-ghost hidden" type="button" title="Research the risks of the tokens in your connected Solana wallet">Scan my wallet</button>
           <button id="go" class="btn btn-primary" type="submit">Run Scout</button>
         </div>
       </form>
@@ -102,6 +103,18 @@
               <span id="stats" class="eyebrow muted" style="margin:0">0 search · 0 read · 0.0s</span>
             </div>
             <div id="trace" class="cli-body trace"></div>
+          </div>
+
+          <div id="holdings" class="card hidden">
+            <div class="side-head"><p class="eyebrow muted" style="margin:0">Wallet</p><span id="hold-total" class="mono small"></span></div>
+            <ul id="hold-list" class="data-list"></ul>
+            <p class="small mono data-src">Solana RPC · DexScreener</p>
+          </div>
+
+          <div id="market" class="card hidden">
+            <div class="side-head"><p class="eyebrow muted" style="margin:0">Live market data</p><span id="market-time" class="mono small"></span></div>
+            <ul id="market-list" class="data-list"></ul>
+            <p class="small mono data-src">DexScreener · DefiLlama</p>
           </div>
 
           <div id="confidence" class="card conf hidden">

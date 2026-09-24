@@ -7,5 +7,8 @@ services:
     startCommand: uvicorn backend.app:app --host 0.0.0.0 --port $PORT --proxy-headers --forwarded-allow-ips "*"
     healthCheckPath: /api/health
     envVars:
+      # Set one of these. Gemini has a free tier; Claude gives deeper research.
+      - key: GEMINI_API_KEY
+        sync: false
       - key: ANTHROPIC_API_KEY
         sync: false

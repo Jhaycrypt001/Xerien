@@ -134,3 +134,16 @@
 .acct-item { text-align: left; border: 0; background: transparent; padding: 8px; border-radius: 4px; font-size: 14px; color: var(--charcoal); }
 .acct-item:hover { background: var(--paper); color: var(--obsidian); }
 .gate-lead { margin: -8px 0 32px; max-width: 520px; }
+
+/* ---------- market data ---------- */
+.data-list { list-style: none; margin: 0; padding: 0; display: grid; }
+.data-list li + li { box-shadow: inset 0 1px 0 var(--hairline); }
+.data-row { display: grid; grid-template-columns: 1fr auto; gap: 2px 12px; padding: 8px 0; text-decoration: none; color: var(--obsidian); }
+.data-row:hover .data-name { text-decoration: underline; text-decoration-color: var(--ash); text-underline-offset: 3px; }
+.data-name { font-size: 14px; font-weight: 500; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.data-name small { font: 400 11px var(--mono); letter-spacing: .071em; text-transform: uppercase; color: var(--graphite); margin-left: 6px; }
+.data-val { font: 400 13px var(--mono); text-align: right; }
+.data-sub { grid-column: 1 / -1; font: 400 11px/1.5 var(--mono); color: var(--stone); }
+.up { color: var(--green); }
+.down { color: var(--obsidian); }
+.data-src { margin: 8px 0 0; color: var(--graphite); font-size: 11px; }
