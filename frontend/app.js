@@ -99,7 +99,17 @@ $("#new").onclick = async () => {
   if (!account && !(await signIn())) return;
   history.pushState({}, "", "/app"); showComposer(); q.focus();
 };
-$("#history-toggle").onclick = () => document.body.classList.toggle("show-history");
+function setHistoryOpen(open) {
+  document.body.classList.toggle("show-history", open);
+  $("#history-toggle").setAttribute("aria-expanded", String(open));
+}
+$("#history-toggle").onclick = () => setHistoryOpen(!document.body.classList.contains("show-history"));
+$("#history-close").onclick = $("#drawer-backdrop").onclick = () => setHistoryOpen(false);
+document.addEventListener("keydown", (e) => {
+  if (e.key !== "Escape") return;
+  setHistoryOpen(false);
+  $("#acct-menu").classList.add("hidden");
+});
 
 function showComposer() {
   if (!account) return showGate();
@@ -128,7 +138,7 @@ function resetRun(question, meta) {
   $("#delete").classList.add("hidden");
   setActions(false);
   updateStats("0.0s");
-  document.body.classList.remove("show-history");
+  setHistoryOpen(false);
   window.scrollTo({ top: 0 });
 }
 

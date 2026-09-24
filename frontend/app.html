@@ -19,7 +19,9 @@
     <span class="crumb mono">/ Scout</span>
     <div class="nav-right">
       <span id="status" class="tag"><span class="dot"></span><span>Checking</span></span>
-      <button id="history-toggle" class="btn btn-ghost btn-sm mobile-only" type="button">History</button>
+      <button id="history-toggle" class="icon-btn mobile-only" type="button" aria-label="Open history" aria-expanded="false" aria-controls="sidebar">
+        <span></span><span></span><span></span>
+      </button>
       <button id="signin" class="btn btn-ghost btn-sm hidden" type="button">Connect wallet</button>
       <div id="account" class="acct hidden">
         <button id="acct-btn" class="btn btn-ghost btn-sm mono" type="button" aria-haspopup="menu" aria-expanded="false"><span class="acct-dot"></span><span id="acct-addr"></span></button>
@@ -30,14 +32,17 @@
           <button id="acct-out" class="acct-item" type="button" role="menuitem">Sign out</button>
         </div>
       </div>
-      <button id="new" class="btn btn-primary btn-sm pill" type="button">New research</button>
+      <button id="new" class="btn btn-primary btn-sm pill" type="button"><span class="lbl-lg">New research</span><span class="lbl-sm" aria-hidden="true">+ New</span></button>
     </div>
   </div>
 </nav>
 
 <div class="dash wrap wide">
-  <aside id="sidebar" class="sidebar">
-    <p class="eyebrow muted">History</p>
+  <aside id="sidebar" class="sidebar" aria-label="History">
+    <div class="sidebar-head">
+      <p class="eyebrow muted" style="margin:0">History</p>
+      <button id="history-close" class="icon-close mobile-only" type="button" aria-label="Close history">×</button>
+    </div>
     <ul id="history" class="history"></ul>
     <p id="history-empty" class="body small">Your reports will show up here.</p>
     <p id="history-locked" class="body small hidden">Connect your wallet to see your history.</p>
@@ -133,6 +138,7 @@
   </main>
 </div>
 
+<div id="drawer-backdrop" class="drawer-backdrop"></div>
 <div id="toast" class="toast hidden" role="status"></div>
 <script src="/static/wallet.js"></script>
 <script src="/static/app.js"></script>
