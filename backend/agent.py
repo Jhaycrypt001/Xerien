@@ -35,7 +35,7 @@ def model_name() -> str | None:
 
 
 async def run_research(
-    question: str, depth: str = "quick", *, wallet: str | None = None,
+    question: str, depth: str = "quick", *, wallet: tuple[str, str] | None = None,
 ) -> AsyncIterator[dict[str, Any]]:
     p = provider()
     yield {"type": "status", "text": f"Scout deployed on {model_name()} ({depth} mode)"}
@@ -43,13 +43,13 @@ async def run_research(
     holdings = None
     if wallet:
         try:
-            holdings = await market.solana_holdings(wallet)
-            count = len(holdings["items"])
+            holdings = await market.wallet_holdings(*wallet)
+            count, chains = len(holdings["items"]), ", ".join(holdings["chains"]) or "no chains with balances"
             yield {"type": "holdings", **holdings}
             yield {"type": "step", "kind": "market",
-                   "label": f"Wallet: {count} priced holdings, {market.usd(holdings['totalUsd'])} total"}
+                   "label": f"Wallet: {count} priced holdings on {chains}, {market.usd(holdings['totalUsd'])} total"}
         except Exception:  # noqa: BLE001 - research continues without holdings
-            yield {"type": "step", "kind": "error", "label": "Couldn't read wallet holdings from Solana RPC"}
+            yield {"type": "step", "kind": "error", "label": "Couldn't read wallet holdings right now"}
 
     try:
         items = await market.snapshot(question)

@@ -2,7 +2,8 @@
 
 - Tokens: $TICKERs, bare tickers and contract addresses in the question -> DexScreener
 - Protocols: protocol names in the question -> DefiLlama TVL
-- Wallet scan: Solana holdings via JSON-RPC, priced with DexScreener
+- Wallet scan: Solana holdings via JSON-RPC; EVM holdings on Ethereum, Base, Arbitrum,
+  Optimism and Polygon via Blockscout; liquidity from DexScreener
 
 Every lookup is best-effort: a failing source is skipped, never fatal. All values that
 reach the model are sanitized and wrapped as untrusted data.
@@ -26,6 +27,14 @@ DEFILLAMA = "https://api.llama.fi/protocols"
 SOLANA_RPC = os.getenv("SOLANA_RPC_URL", "https://api.mainnet-beta.solana.com")
 TOKEN_PROGRAMS = ("TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA", "TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb")
 WSOL = "So11111111111111111111111111111111111111112"
+# chain id (DexScreener naming) -> (Blockscout instance, native symbol)
+EVM_CHAINS = {
+    "ethereum": ("https://eth.blockscout.com", "ETH"),
+    "base": ("https://base.blockscout.com", "ETH"),
+    "arbitrum": ("https://arbitrum.blockscout.com", "ETH"),
+    "optimism": ("https://optimism.blockscout.com", "ETH"),
+    "polygon": ("https://polygon.blockscout.com", "POL"),
+}
 
 TIMEOUT = httpx.Timeout(6.0, connect=4.0)
 MAX_TOKENS = 5
@@ -183,6 +192,14 @@ async def snapshot(question: str) -> list[dict[str, Any]]:
     return [i for i in items if not ((key := f"{i['kind']}:{i.get('address') or i['name']}") in seen or seen.add(key))]
 
 
+async def wallet_holdings(chain: str, address: str) -> dict[str, Any]:
+    if chain == "solana":
+        return await solana_holdings(address)
+    if chain == "ethereum" and _EVM_ADDR.fullmatch(address):
+        return await evm_holdings(address)
+    raise ValueError("Unsupported wallet")
+
+
 async def solana_holdings(owner: str) -> dict[str, Any]:
     """Priced token holdings of a Solana wallet, largest first."""
     async with httpx.AsyncClient(timeout=TIMEOUT, headers={"User-Agent": "XerienScout/1.0"}) as client:
@@ -224,7 +241,72 @@ async def solana_holdings(owner: str) -> dict[str, Any]:
             holdings.append({**item, "kind": "holding", "amount": amount, "valueUsd": value,
                              "symbol": "SOL" if mint == WSOL else item["symbol"]})
     holdings.sort(key=lambda h: h["valueUsd"], reverse=True)
-    return {"items": holdings[:12], "totalUsd": sum(h["valueUsd"] for h in holdings)}
+    return {"items": holdings[:12], "totalUsd": sum(h["valueUsd"] for h in holdings),
+            "chains": ["solana"], "source": "Solana RPC + DexScreener"}
+
+
+async def _evm_chain(client: httpx.AsyncClient, chain: str, address: str) -> list[dict[str, Any]]:
+    base, native = EVM_CHAINS[chain]
+    info, tokens = await asyncio.gather(
+        client.get(f"{base}/api/v2/addresses/{address}"),
+        client.get(f"{base}/api/v2/addresses/{address}/tokens", params={"type": "ERC-20"}),
+    )
+    out: list[dict[str, Any]] = []
+    if info.status_code == 200:
+        body = info.json()
+        amount = int(body.get("coin_balance") or 0) / 1e18
+        price = _num(body.get("exchange_rate"))
+        if amount and price:
+            out.append({"symbol": native, "name": "native", "address": None, "amount": amount, "price": price})
+    if tokens.status_code == 200:
+        for it in tokens.json().get("items") or []:
+            tok = it.get("token") or {}
+            price = _num(tok.get("exchange_rate"))  # unpriced tokens are usually spam airdrops
+            addr = tok.get("address_hash") or tok.get("address") or ""
+            if not price or not _EVM_ADDR.fullmatch(addr):
+                continue
+            try:
+                amount = int(it.get("value") or 0) / 10 ** int(tok.get("decimals") or 18)
+            except (TypeError, ValueError):
+                continue
+            out.append({"symbol": _clean(tok.get("symbol"), 16), "name": _clean(tok.get("name")),
+                        "address": addr, "amount": amount, "price": price})
+    return [{**h, "chain": chain} for h in out if h["amount"] * h["price"] >= 1]
+
+
+async def evm_holdings(address: str) -> dict[str, Any]:
+    """Priced holdings of an EVM wallet across the chains in EVM_CHAINS, largest first."""
+    async with httpx.AsyncClient(timeout=TIMEOUT, headers={"User-Agent": "XerienScout/1.0"}) as client:
+        per_chain = await asyncio.gather(*[_evm_chain(client, c, address) for c in EVM_CHAINS], return_exceptions=True)
+        raw = [h for res in per_chain if isinstance(res, list) for h in res]
+        if not raw and all(isinstance(r, Exception) for r in per_chain):
+            raise RuntimeError("No chain explorer responded")
+
+        # Add liquidity and 24h change from DexScreener for ERC-20s (30 addresses per call).
+        pairs: list[dict[str, Any]] = []
+        for chain in EVM_CHAINS:
+            addrs = [h["address"] for h in raw if h["chain"] == chain and h["address"]][:30]
+            if addrs:
+                try:
+                    r = await client.get(f"{DEXSCREENER}/tokens/v1/{chain}/{','.join(addrs)}")
+                    if r.status_code == 200 and isinstance(r.json(), list):
+                        pairs.extend(r.json())
+                except httpx.HTTPError:
+                    pass
+
+    holdings = []
+    for h in raw:
+        pair = _best_pair([p for p in pairs if p.get("chainId") == h["chain"]], address=h["address"]) if h["address"] else None
+        item = _token_item(pair) if pair else {}
+        holdings.append({
+            "kind": "holding", "symbol": h["symbol"], "name": h["name"], "chain": h["chain"],
+            "address": h["address"], "amount": h["amount"], "valueUsd": h["amount"] * h["price"],
+            "priceUsd": h["price"], "liquidityUsd": item.get("liquidityUsd"), "change24h": item.get("change24h"),
+            "url": item.get("url"),
+        })
+    holdings.sort(key=lambda x: x["valueUsd"], reverse=True)
+    return {"items": holdings[:15], "totalUsd": sum(x["valueUsd"] for x in holdings),
+            "chains": sorted({x["chain"] for x in holdings}), "source": "Blockscout + DexScreener"}
 
 
 def as_context(market: list[dict[str, Any]], holdings: dict[str, Any] | None) -> str:
@@ -250,12 +332,12 @@ def as_context(market: list[dict[str, Any]], holdings: dict[str, Any] | None) ->
         blocks.append(f'<market_data retrieved="{stamp}">\n' + "\n".join(lines) + "\n</market_data>")
     if holdings and holdings.get("items"):
         lines = [
-            f"- {h['symbol']} ({h['name']}): {h['amount']:.6g} tokens worth {usd(h['valueUsd'])}, "
+            f"- {h['symbol']} ({h['name']}) on {h.get('chain', 'solana')}: {h['amount']:.6g} tokens worth {usd(h['valueUsd'])}, "
             f"liquidity {usd(h['liquidityUsd'])}, 24h change {pct(h['change24h'])}"
             for h in holdings["items"]
         ]
         blocks.append(
             f'<wallet_holdings retrieved="{stamp}" total="{usd(holdings["totalUsd"])}" '
-            'source="Solana RPC + DexScreener">\n' + "\n".join(lines) + "\n</wallet_holdings>"
+            f'source="{holdings.get("source", "on-chain data")}">\n' + "\n".join(lines) + "\n</wallet_holdings>"
         )
     return "\n\n".join(blocks)

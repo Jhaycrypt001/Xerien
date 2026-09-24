@@ -169,7 +169,7 @@ def _sse(event: dict[str, Any]) -> str:
 
 
 async def _event_stream(
-    req: ResearchRequest, account: str, question: str, wallet: str | None,
+    req: ResearchRequest, account: str, question: str, wallet: tuple[str, str] | None,
 ) -> AsyncIterator[str]:
     started = time.monotonic()
     trace: list[dict[str, Any]] = []
@@ -240,9 +240,7 @@ async def research(
     wallet = None
     if req.scan_wallet:
         chain, address = account.split(":", 1)
-        if chain != "solana":
-            raise HTTPException(400, "Wallet scan currently supports Solana wallets.")
-        wallet = address
+        wallet = (chain, address)
     question = req.question.strip() or (WALLET_SCAN_QUESTION if wallet else "")
     if len(question) < 3:
         raise HTTPException(422, "Ask a question of at least 3 characters.")

@@ -1,6 +1,6 @@
 # Xerien Scout
 
-Xerien Scout is a crypto research agent. Ask about any token, protocol or topic: it pulls live market data, plans the research, searches the web, reads the best sources and writes a report with citations and a confidence score. The whole process streams to your screen as it happens. You sign in with a Solana or EVM wallet, and a Solana wallet can have its holdings scanned and researched.
+Xerien Scout is a crypto research agent. Ask about any token, protocol or topic: it pulls live market data, plans the research, searches the web, reads the best sources and writes a report with citations and a confidence score. The whole process streams to your screen as it happens. You sign in with a Solana or EVM wallet, and any connected wallet can have its holdings scanned and researched across chains.
 
 Built for the Orion Agents Hackathon.
 
@@ -15,7 +15,8 @@ Every report has the same structure: TL;DR, Key Findings (each with a citation),
 General research agents (ChatGPT, Gemini and Perplexity deep research) start from web search alone. Crypto research tools (Messari Copilot, Nansen) start from their own proprietary data. Scout combines both for free:
 
 - **Live market data comes first.** Tokens (`$SOL`, `ETH`, contract addresses) and protocols (`Jupiter`, `Aave`) named in the question are looked up on DexScreener and DefiLlama *before* the model runs. The model receives the numbers as data and checks them against the news.
-- **Wallet scan.** A signed-in Solana wallet's holdings are read on-chain, priced, and researched position by position.
+- **Multi-chain wallet scan.** The signed-in wallet's holdings are read, priced and researched position by position: Solana through RPC, and Ethereum, Base, Arbitrum, Optimism and Polygon through Blockscout's free public API. Unpriced tokens (usually spam airdrops) are skipped.
+- **Any chain for research.** Market lookups cover every chain DexScreener and DefiLlama track, and EVM sign-in works with any EVM wallet.
 - **You see how it worked.** Every data pull, search and page read appears in the trace, and the report scores its own confidence.
 
 ## Product
@@ -60,7 +61,7 @@ Browser ──POST /api/research (session cookie)──▶ FastAPI ──stream�
 | File | Role |
 |---|---|
 | `backend/agent.py` | Orchestrator: wallet holdings and market data first, then the chosen provider |
-| `backend/market.py` | DexScreener, DefiLlama and Solana RPC lookups, sanitized before they reach the model |
+| `backend/market.py` | DexScreener, DefiLlama, Blockscout and Solana RPC lookups, sanitized before they reach the model |
 | `backend/claude_agent.py` | Claude provider: server-side web tools, `pause_turn` handling, and a one-time fallback to the standard tool versions |
 | `backend/gemini_agent.py` | Gemini provider: Google Search grounding with citations inserted at the grounded sentences |
 | `backend/prompts.py` | Shared report format and research instructions |
@@ -134,4 +135,4 @@ Docker: `docker build -t scout . && docker run -p 8000:8000 -e ANTHROPIC_API_KEY
 
 SSE event types: `status`, `market`, `holdings`, `thinking`, `tool_pending`, `step`, `sources`, `fetched`, `token`, `report`, `done`, `saved`, `error`.
 
-`POST /api/research` also accepts `"scan_wallet": true` (Solana sessions), which researches the signed-in wallet's holdings.
+`POST /api/research` also accepts `"scan_wallet": true`, which researches the signed-in wallet's holdings (Solana, or EVM across Ethereum, Base, Arbitrum, Optimism and Polygon).

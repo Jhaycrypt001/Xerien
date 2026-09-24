@@ -40,7 +40,7 @@ function setAccount(m) {
     $("#acct-full").textContent = m.address;
     $("#acct-chain").textContent = m.chain === "solana" ? "Solana wallet" : "EVM wallet";
   }
-  $("#scan").classList.toggle("hidden", !(m && m.chain === "solana"));
+  $("#scan").classList.toggle("hidden", !m);
   $("#history-locked").classList.toggle("hidden", Boolean(m));
   if (m) loadHistory(); else { $("#history").innerHTML = ""; $("#history-empty").classList.add("hidden"); }
 }
@@ -318,9 +318,10 @@ function renderMarket(items, replay = false) {
 function renderHoldings(h) {
   const ul = $("#hold-list"); ul.innerHTML = "";
   (h.items || []).forEach((x) =>
-    ul.appendChild(dataRow(x.url, x.symbol, x.name, usd(x.valueUsd), `${fmtAmount(x.amount)} · Liq ${usd(x.liquidityUsd)}`, x.change24h))
+    ul.appendChild(dataRow(x.url, x.symbol, x.chain || "solana", usd(x.valueUsd), `${fmtAmount(x.amount)} ${x.name} · Liq ${usd(x.liquidityUsd)}`, x.change24h))
   );
   $("#hold-total").textContent = usd(h.totalUsd);
+  $("#hold-src").textContent = h.source || "";
   $("#holdings").classList.remove("hidden");
 }
 
