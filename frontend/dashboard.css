@@ -114,7 +114,6 @@
   body.show-history .sidebar { display: block; }
   .mobile-only { display: inline-flex; }
   .composer { padding-top: 32px; }
-  .composer .h-lg { font-size: 36px; }
   .report-card { padding: 20px; }
   .hint { display: none; }
   #go { margin-left: auto; }

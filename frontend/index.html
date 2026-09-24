@@ -11,16 +11,32 @@
 <link rel="stylesheet" href="/static/landing.css" />
 </head>
 <body>
-<nav class="nav">
+<nav class="nav" id="nav">
   <div class="wrap">
     <a class="mark" href="/"><i>◆</i>Xerien</a>
     <div class="nav-links">
       <a href="#how">How it works</a>
       <a href="#features">Features</a>
+      <a href="#chains">Chains</a>
+      <a href="#use-cases">Use cases</a>
+      <a href="#faq">FAQ</a>
     </div>
     <div class="nav-right">
+      <a class="btn btn-ghost btn-sm nav-app" href="/app">Open app</a>
       <button class="btn btn-primary btn-sm pill" type="button" data-start>Get started</button>
+      <button class="nav-toggle" id="nav-toggle" type="button" aria-label="Open menu" aria-expanded="false" aria-controls="nav-menu">
+        <span></span><span></span>
+      </button>
     </div>
+  </div>
+  <div class="nav-menu" id="nav-menu" hidden>
+    <a href="#how">How it works</a>
+    <a href="#features">Features</a>
+    <a href="#chains">Chains</a>
+    <a href="#use-cases">Use cases</a>
+    <a href="#faq">FAQ</a>
+    <a href="/app">Open app</a>
+    <button class="btn btn-primary" type="button" data-start>Get started</button>
   </div>
 </nav>
 
@@ -28,11 +44,16 @@
   <div class="hero-copy">
     <p class="eyebrow">Crypto research agent</p>
     <h1 class="display">Research that reads the market and the internet.</h1>
-    <p class="lead">Ask about any token, protocol or topic. Scout pulls live market data, searches the web, reads the sources and writes a cited report with a confidence score. Connect your wallet and it researches your holdings too, on Solana, Ethereum, BNB Chain, Base, Arbitrum, Avalanche, Optimism and Polygon.</p>
+    <p class="lead">Ask about any token, protocol or topic. Scout pulls live market data, searches the web, reads the sources and writes a cited report with a confidence score. Connect your wallet and it researches your holdings too.</p>
     <div class="hero-cta">
       <button class="btn btn-primary" type="button" data-start>Get started</button>
       <a class="btn btn-ghost" href="#how">How it works</a>
     </div>
+    <ul class="hero-notes mono">
+      <li>Free wallet sign-in</li>
+      <li>No transactions</li>
+      <li>Solana + EVM</li>
+    </ul>
   </div>
 
   <div class="cli hero-cli" aria-label="The steps of a research run">
@@ -48,6 +69,15 @@
     </div>
   </div>
 </header>
+
+<section id="chains" class="wrap chains">
+  <p class="eyebrow muted">Wallet scans on</p>
+  <ul class="chain-list mono">
+    <li>Solana</li><li>Ethereum</li><li>BNB Chain</li><li>Base</li>
+    <li>Arbitrum</li><li>Avalanche</li><li>Optimism</li><li>Polygon</li>
+  </ul>
+  <p class="chains-note">Token and protocol research covers every chain DexScreener and DefiLlama track.</p>
+</section>
 
 <section id="how" class="wrap section">
   <p class="eyebrow">How it works</p>
@@ -81,17 +111,110 @@
     </article>
     <article class="card feature">
       <h3 class="h">Scan your wallet</h3>
-      <p class="body">Sign in with Phantom, MetaMask or any Solana or EVM wallet. Scout reads your holdings on Solana, Ethereum, BNB Chain, Base, Arbitrum, Avalanche, Optimism and Polygon, prices them and researches the risks of each position. It never asks for a transaction.</p>
+      <p class="body">Sign in with Phantom, MetaMask or any Solana or EVM wallet. Scout reads your holdings across eight chains, prices them and researches the risks of each position.</p>
     </article>
     <article class="card feature">
       <h3 class="h">Cited, with a confidence score</h3>
       <p class="body">Every finding links to its source, and the live trace shows each search and page read. Scout scores its own confidence and lists what it doesn't know.</p>
     </article>
-    <article class="card inverted feature">
-      <h3 class="h">Your wallet is your account</h3>
-      <p class="body" style="color:#c9c9c9">No email or password. Reports are saved to your wallet's history, and each one has a link you can share.</p>
-      <button class="btn btn-ghost invert" type="button" data-start>Get started →</button>
+    <article class="card feature">
+      <h3 class="h">History and share links</h3>
+      <p class="body">Every report is saved to your wallet's history. Each one has a public link you can send to anyone, and only you can delete it.</p>
     </article>
+  </div>
+</section>
+
+<section id="use-cases" class="wrap section">
+  <p class="eyebrow">Use cases</p>
+  <h2 class="h-lg section-title">Questions Scout is built for.</h2>
+  <div class="grid-3">
+    <article class="card usecase">
+      <h3 class="h">Token due diligence</h3>
+      <p class="body">Liquidity, valuation, unlocks, team and incident history before you buy.</p>
+      <p class="example mono">"Is $PENDLE overvalued at its current FDV?"</p>
+    </article>
+    <article class="card usecase">
+      <h3 class="h">Portfolio risk check</h3>
+      <p class="body">Scan your wallet and get the risks of each position, largest first.</p>
+      <p class="example mono">Scan my wallet</p>
+    </article>
+    <article class="card usecase">
+      <h3 class="h">Protocols &amp; narratives</h3>
+      <p class="body">TVL trends, competitors and what the news says about a sector.</p>
+      <p class="example mono">"How is Aave's TVL trending against Morpho?"</p>
+    </article>
+  </div>
+</section>
+
+<section class="wrap section">
+  <p class="eyebrow">Compared</p>
+  <h2 class="h-lg section-title">What a general AI chat doesn't do.</h2>
+  <div class="card compare-card">
+    <table class="compare">
+      <thead>
+        <tr><th scope="col"><span class="sr-only">Capability</span></th><th scope="col">Typical AI chat</th><th scope="col">Xerien Scout</th></tr>
+      </thead>
+      <tbody>
+        <tr><th scope="row">Live token and protocol data before answering</th><td class="no">—</td><td class="yes">✓</td></tr>
+        <tr><th scope="row">Reads your wallet across chains</th><td class="no">—</td><td class="yes">✓</td></tr>
+        <tr><th scope="row">Shows every search and page it read</th><td class="no">—</td><td class="yes">✓</td></tr>
+        <tr><th scope="row">Every claim linked to a source</th><td class="no">Sometimes</td><td class="yes">✓</td></tr>
+        <tr><th scope="row">Scores its own confidence</th><td class="no">—</td><td class="yes">✓</td></tr>
+        <tr><th scope="row">Wallet sign-in, no email or password</th><td class="no">—</td><td class="yes">✓</td></tr>
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<section class="wrap section">
+  <div class="card inverted trust">
+    <div>
+      <p class="eyebrow trust-eyebrow">Security</p>
+      <h2 class="h-lg">Your keys stay yours.</h2>
+    </div>
+    <ul class="trust-list">
+      <li><strong>Signature only.</strong> Sign-in is a free message signature. Scout never requests a transaction or an approval.</li>
+      <li><strong>Read-only data.</strong> Wallet scans read public balances. Nothing is moved or written on-chain.</li>
+      <li><strong>Locked-down sessions.</strong> Single-use, expiring sign-in challenges and hashed sessions in HttpOnly cookies.</li>
+      <li><strong>Untrusted data stays data.</strong> Market data is sanitized and passed to the model as data, never as instructions.</li>
+    </ul>
+  </div>
+</section>
+
+<section id="faq" class="wrap section faq-section">
+  <div>
+    <p class="eyebrow">FAQ</p>
+    <h2 class="h-lg">Questions, answered.</h2>
+  </div>
+  <div class="faq">
+    <details>
+      <summary>Does Scout ever touch my funds?</summary>
+      <p>No. Signing in is a message signature, which costs nothing and can't move funds. Scout never asks for a transaction or token approval.</p>
+    </details>
+    <details>
+      <summary>Which wallets can I use?</summary>
+      <p>Any Solana wallet that supports the Wallet Standard (Phantom, Solflare, Backpack and more) and any EVM wallet (MetaMask, Rabby, Coinbase Wallet and more).</p>
+    </details>
+    <details>
+      <summary>Which chains are supported?</summary>
+      <p>Wallet scans cover Solana, Ethereum, BNB Chain, Base, Arbitrum, Avalanche, Optimism and Polygon. Research and token lookups work for any chain DexScreener and DefiLlama track.</p>
+    </details>
+    <details>
+      <summary>Which AI model runs the research?</summary>
+      <p>Scout runs on Google Gemini with Google Search grounding, or on Anthropic's Claude with web search and page reading, depending on how it's deployed.</p>
+    </details>
+    <details>
+      <summary>What's the difference between Quick and Deep?</summary>
+      <p>Quick runs a few searches and returns faster. Deep runs more searches and reads more pages, so it takes longer and goes further.</p>
+    </details>
+    <details>
+      <summary>Is it free?</summary>
+      <p>Yes. Each wallet can start up to 20 research runs per hour.</p>
+    </details>
+    <details>
+      <summary>Is this financial advice?</summary>
+      <p>No. Scout is a research tool: it gathers evidence, cites it and tells you how confident it is. Decisions are yours.</p>
+    </details>
   </div>
 </section>
 
@@ -102,9 +225,37 @@
   <button class="btn btn-primary" type="button" data-start>Get started</button>
 </section>
 
-<footer class="wrap footer">
-  <span class="mark"><i>◆</i>Xerien</span>
-  <span class="mono">Built for the Orion Agents Hackathon</span>
+<footer class="footer">
+  <div class="wrap footer-grid">
+    <div class="footer-brand">
+      <a class="mark" href="/"><i>◆</i>Xerien</a>
+      <p class="body">A crypto research agent that reads the market and the internet, then shows its work.</p>
+    </div>
+    <nav class="footer-col" aria-label="Product">
+      <p class="eyebrow muted">Product</p>
+      <a href="#how">How it works</a>
+      <a href="#features">Features</a>
+      <a href="#use-cases">Use cases</a>
+      <a href="/app">Open app</a>
+    </nav>
+    <nav class="footer-col" aria-label="Resources">
+      <p class="eyebrow muted">Resources</p>
+      <a href="#faq">FAQ</a>
+      <a href="https://github.com/Jhaycrypt001/Xerien" target="_blank" rel="noopener">GitHub</a>
+      <a href="/api/health" target="_blank" rel="noopener">Status</a>
+    </nav>
+    <nav class="footer-col" aria-label="Data sources">
+      <p class="eyebrow muted">Data</p>
+      <a href="https://dexscreener.com" target="_blank" rel="noopener">DexScreener</a>
+      <a href="https://defillama.com" target="_blank" rel="noopener">DefiLlama</a>
+      <a href="https://www.blockscout.com" target="_blank" rel="noopener">Blockscout</a>
+    </nav>
+  </div>
+  <div class="wrap footer-bottom mono">
+    <span>© 2026 Xerien</span>
+    <span>Research, not financial advice</span>
+    <span>Built for the Orion Agents Hackathon</span>
+  </div>
 </footer>
 <script src="/static/wallet.js"></script>
 <script src="/static/landing.js"></script>
