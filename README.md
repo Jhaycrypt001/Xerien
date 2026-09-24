@@ -26,7 +26,8 @@ Each decision streams to the UI as it happens, so the agent's reasoning is visib
 | ↳ **Follow-up chips** | Click a suggested follow-up question to start a new research run |
 | ⚡/🔬 **Quick vs Deep** | Deep mode raises the effort level and the search and read budgets |
 | 📋 **Export** | Copy the report or download it as Markdown |
-| 🛰️ **Demo mode** | Without an API key it replays a scripted run, so the UI can always be shown |
+| 🗂️ **History & share links** | Every report is saved (SQLite). Your history is kept per browser workspace, and each report has a public `/r/{id}` link |
+| 🛡️ **Rate limiting** | Runs are limited per IP (`RATE_LIMIT_PER_HOUR`, default 20) to protect the API key |
 
 ## Architecture
 
@@ -40,7 +41,8 @@ Browser (vanilla JS)  ──POST /api/research──▶  FastAPI  ──stream�
 
 - **`backend/agent.py`**: the agent loop. It streams Claude's response, turns each finished part of the answer (a tool call, a search result, a fetched page, a thinking summary) into a UI event, and continues when the server-side tool loop pauses (`pause_turn`).
 - **`backend/app.py`**: the FastAPI server. It exposes an SSE endpoint, reports errors to the page and serves the frontend.
-- **`frontend/`**: a single-page UI with no build step. Markdown is rendered with `marked` and sanitized with `DOMPurify`.
+- **`backend/store.py`**: SQLite report storage. The database lives in `DATA_DIR`, default `./data`.
+- **`frontend/`**: `index.html` is the landing page and `app.html` is the dashboard (routes `/app` and `/r/{id}`). The design is monochrome with hairline borders in Geist and Geist Mono. There is no build step. Markdown is rendered with `marked` and sanitized with `DOMPurify`, and both are included in the repo.
 
 Model: `claude-opus-5` by default (override it with `CLAUDE_MODEL`), with adaptive thinking and summarized reasoning shown in the trace. Server-side refusal fallbacks are on; set `CLAUDE_FALLBACKS=0` to turn them off.
 
@@ -48,16 +50,16 @@ Model: `claude-opus-5` by default (override it with `CLAUDE_MODEL`), with adapti
 
 ```bash
 pip install -r requirements.txt
-export ANTHROPIC_API_KEY=sk-ant-...     # leave unset for demo mode
+export ANTHROPIC_API_KEY=sk-ant-...
 uvicorn backend.app:app --reload
-# open http://localhost:8000
+# landing: http://localhost:8000   dashboard: http://localhost:8000/app
 ```
 
 Your Anthropic organization needs **web search** (and **web fetch**) enabled in the Claude Console.
 
 ## Deploy
 
-- **Render**: connect the repo. `render.yaml` sets everything up; just add `ANTHROPIC_API_KEY`.
+- **Render**: connect the repo. `render.yaml` sets everything up; just add `ANTHROPIC_API_KEY`. On the free plan the disk is wiped on every redeploy, so history is lost. To keep it, attach a persistent disk and point `DATA_DIR` at it.
 - **Railway / Heroku-style**: uses the `Procfile`.
 - **Docker**: `docker build -t scout . && docker run -p 8000:8000 -e ANTHROPIC_API_KEY=... scout`
 
@@ -75,6 +77,12 @@ Your Anthropic organization needs **web search** (and **web fetch**) enabled in 
 | `fetched` | `title`, `url` |
 | `token` | `text`: streamed report and narration text |
 | `done` | `model`, `usage: {input, output, searches, fetches}` |
+| `saved` | `id`: the report's share id |
 | `error` | `text` |
 
-`GET /api/health` returns `{ok, model, mode: "live" | "demo"}`.
+All endpoints except `/api/health` and `GET /api/reports/{id}` need an `X-Workspace` header, which the dashboard creates per browser.
+
+- `GET /api/health` → `{ok, model, configured}`
+- `GET /api/reports` → the workspace's history
+- `GET /api/reports/{id}` → the full report and trace (public)
+- `DELETE /api/reports/{id}` → only the report's owner can delete it

@@ -1,166 +1,232 @@
 const $ = (s) => document.querySelector(s);
 const form = $("#ask"), q = $("#q"), go = $("#go");
-const timeline = $("#timeline"), sourcesEl = $("#sources"), report = $("#report");
-const live = $("#live"), liveText = $("#live-text");
+const traceEl = $("#trace"), sourcesEl = $("#sources"), report = $("#report");
 
-const ICONS = { search: "🔍", read: "📄", analyze: "🧮", thinking: "🧠", note: "💬", done: "✅", error: "⚠️", status: "🛰️" };
-const LABELS = { search: "Search", read: "Read", analyze: "Analyze", thinking: "Thinking", note: "Note", done: "Done", error: "Error", status: "Status" };
+const KIND = {
+  status: ["·", "Agent", "muted"], note: ["·", "Note", "muted"], thinking: ["·", "Think", "muted"],
+  search: ["◆", "Search", ""], read: ["◆", "Read", ""], analyze: ["◆", "Analyze", ""],
+  fetched: ["✓", "Read", "ok"], done: ["✓", "Done", "ok"], error: ["×", "Error", "err"],
+};
 
-let state;
+/* ---------- workspace: anonymous per-browser identity for history ---------- */
+const WORKSPACE = (() => {
+  let id = null;
+  try { id = localStorage.getItem("xerien.workspace"); } catch {}
+  if (!id || !/^[A-Za-z0-9-]{16,64}$/.test(id)) {
+    id = crypto.randomUUID ? crypto.randomUUID() : Array.from(crypto.getRandomValues(new Uint8Array(16)), (b) => b.toString(16).padStart(2, "0")).join("");
+    try { localStorage.setItem("xerien.workspace", id); } catch {}
+  }
+  return id;
+})();
+const api = (path, opts = {}) => fetch(path, { ...opts, headers: { "X-Workspace": WORKSPACE, ...(opts.headers || {}) } });
 
-fetch("/api/health").then((r) => r.json()).then((h) => {
-  const m = $("#mode");
-  m.textContent = h.mode === "live" ? `● live · ${h.model}` : "● demo mode";
-  m.className = `pill ${h.mode}`;
+let state = null;
+
+/* ---------- boot ---------- */
+api("/api/health").then((r) => r.json()).then((h) => {
+  const s = $("#status");
+  s.className = "tag " + (h.configured ? "ok" : "bad");
+  s.lastElementChild.textContent = h.configured ? "Online" : "Not configured";
+  s.title = h.configured ? `Model: ${h.model}` : "The server has no ANTHROPIC_API_KEY";
 }).catch(() => {});
 
-document.querySelectorAll("#examples button").forEach((b) =>
+loadHistory();
+route();
+window.addEventListener("popstate", route);
+
+function route() {
+  const m = location.pathname.match(/^\/r\/([\w-]+)/);
+  if (m) openReport(m[1]); else showComposer();
+}
+
+/* ---------- composer ---------- */
+document.querySelectorAll("#examples .chip").forEach((b) =>
   b.addEventListener("click", () => { q.value = b.textContent; form.requestSubmit(); })
 );
 q.addEventListener("keydown", (e) => {
   if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); form.requestSubmit(); }
 });
-
-form.addEventListener("submit", async (e) => {
+form.addEventListener("submit", (e) => {
   e.preventDefault();
   const question = q.value.trim();
-  if (!question || state?.running) return;
-  start(question, new FormData(form).get("depth"));
+  if (question.length < 3 || state?.running) return;
+  runResearch(question, new FormData(form).get("depth"));
 });
+$("#new").onclick = () => { if (state?.running) return; history.pushState({}, "", "/app"); showComposer(); q.focus(); };
+$("#history-toggle").onclick = () => document.body.classList.toggle("show-history");
 
-function start(question, depth) {
-  state = { running: true, buffer: "", sources: new Map(), searches: 0, reads: 0, t0: performance.now(), pending: null, raf: 0 };
-  document.body.classList.add("running");
-  $("#run").classList.remove("hidden");
-  $("#report-title").textContent = question;
-  timeline.innerHTML = ""; sourcesEl.innerHTML = ""; report.innerHTML = "";
-  $("#confidence").classList.add("hidden");
-  $("#copy").disabled = $("#download").disabled = true;
-  go.disabled = true; go.textContent = "Scouting…";
-  setLive("Planning the research…");
-  state.timer = setInterval(() => ($("#st-time").textContent = elapsed()), 100);
-  updateStats();
-  stream(question, depth).catch((err) => onEvent({ type: "error", text: String(err.message || err) })).finally(finish);
+function showComposer() {
+  $("#composer").classList.remove("hidden");
+  $("#run").classList.add("hidden");
+  document.title = "Scout Dashboard";
+  markActive(null);
 }
 
-async function stream(question, depth) {
-  const res = await fetch("/api/research", {
-    method: "POST", headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ question, depth }),
-  });
-  if (!res.ok) throw new Error(`Server returned ${res.status}`);
-  const reader = res.body.getReader(), dec = new TextDecoder();
-  let buf = "";
-  for (;;) {
-    const { value, done } = await reader.read();
-    if (done) break;
-    buf += dec.decode(value, { stream: true });
-    let i;
-    while ((i = buf.indexOf("\n\n")) >= 0) {
-      const chunk = buf.slice(0, i); buf = buf.slice(i + 2);
-      const line = chunk.split("\n").find((l) => l.startsWith("data: "));
-      if (line) onEvent(JSON.parse(line.slice(6)));
+/* ---------- run view ---------- */
+function resetRun(question, meta) {
+  state = { running: false, id: null, owner: false, buffer: "", sources: new Map(), searches: 0, reads: 0, pending: null, raf: 0, t0: performance.now(), question };
+  $("#composer").classList.add("hidden");
+  $("#run").classList.remove("hidden");
+  $("#run-q").textContent = question;
+  $("#run-meta").textContent = meta;
+  document.title = `${question.slice(0, 60)} · Scout`;
+  traceEl.innerHTML = ""; sourcesEl.innerHTML = ""; report.innerHTML = "";
+  $("#src-n").textContent = "0";
+  $("#error").classList.add("hidden");
+  $("#confidence").classList.add("hidden");
+  $("#delete").classList.add("hidden");
+  setActions(false);
+  updateStats("0.0s");
+  document.body.classList.remove("show-history");
+  window.scrollTo({ top: 0 });
+}
+
+async function runResearch(question, depth) {
+  resetRun(question, `${depth} research · running`);
+  state.running = true;
+  go.disabled = true; $("#new").disabled = true;
+  state.timer = setInterval(() => updateStats(elapsed()), 100);
+  try {
+    const res = await api("/api/research", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ question, depth }),
+    });
+    if (!res.ok) {
+      const body = await res.json().catch(() => ({}));
+      throw new Error(body.detail || `Server returned ${res.status}`);
     }
+    const reader = res.body.getReader(), dec = new TextDecoder();
+    let buf = "";
+    for (;;) {
+      const { value, done } = await reader.read();
+      if (done) break;
+      buf += dec.decode(value, { stream: true });
+      let i;
+      while ((i = buf.indexOf("\n\n")) >= 0) {
+        const line = buf.slice(0, i).split("\n").find((l) => l.startsWith("data: "));
+        buf = buf.slice(i + 2);
+        if (line) onEvent(JSON.parse(line.slice(6)));
+      }
+    }
+  } catch (err) {
+    onEvent({ type: "error", text: String(err.message || err) });
+  } finally {
+    clearInterval(state.timer);
+    state.running = false;
+    go.disabled = false; $("#new").disabled = false;
+    cancelAnimationFrame(state.raf); state.raf = 0;
+    renderReport(true);
+    $("#run-meta").textContent = `${depth} research · ${state.id ? "saved" : "not saved"} · ${elapsed()}`;
+    setActions(Boolean(state.buffer.trim()));
   }
 }
 
-function onEvent(ev) {
+async function openReport(id) {
+  if (state?.running) return;
+  resetRun("Loading report…", "");
+  markActive(id);
+  const res = await api(`/api/reports/${encodeURIComponent(id)}`).catch(() => null);
+  if (!res || !res.ok) {
+    $("#run-q").textContent = "Report not found";
+    showError("This report doesn't exist or was deleted.");
+    return;
+  }
+  const r = await res.json();
+  resetRun(r.question, `${r.depth} research · ${fmtDate(r.created_at)} · ${(r.duration_ms / 1000).toFixed(1)}s`);
+  Object.assign(state, { id: r.id, owner: r.owner });
+  markActive(r.id);
+  r.trace.forEach((ev) => onEvent(ev, true));
+  state.buffer = r.report;
+  renderReport(true);
+  updateStats(`${(r.duration_ms / 1000).toFixed(1)}s`);
+  setActions(true);
+}
+
+/* ---------- agent events ---------- */
+function onEvent(ev, replay = false) {
   switch (ev.type) {
-    case "status": addStep("status", ev.text); break;
+    case "status": line("status", ev.text); break;
+    case "note": line("note", clip(ev.text, 280)); break;
+    case "thinking": line("thinking", clip(ev.text, 280)); break;
     case "token":
       state.buffer += ev.text;
-      setLive("Writing…");
       scheduleRender();
       break;
-    case "thinking": addStep("thinking", clip(ev.text, 280)); setLive("Thinking…"); break;
-    case "tool_pending":
-      flushNote();
-      state.pending = addStep(ev.tool === "web_fetch" ? "read" : ev.tool === "web_search" ? "search" : "analyze", "…", true);
-      setLive(ev.tool === "web_fetch" ? "Reading a source…" : ev.tool === "web_search" ? "Searching the web…" : "Analyzing…");
+    case "tool_pending": {
+      const text = state.buffer.trim();
+      if (text) line("note", clip(text.replace(/[#*`>_]/g, ""), 280));
+      state.buffer = "";
+      renderReport();
+      const kind = ev.tool === "web_fetch" ? "read" : ev.tool === "web_search" ? "search" : "analyze";
+      state.pending = line(kind, "…", true);
       break;
+    }
     case "step":
       if (ev.kind === "search") state.searches++;
       if (ev.kind === "read") state.reads++;
-      resolvePending(ev.kind, ev.label);
-      updateStats();
+      if (state.pending) resolve(state.pending, ev.kind, ev.kind === "read" ? prettyUrl(ev.label) : ev.label);
+      else line(ev.kind, ev.kind === "read" ? prettyUrl(ev.label) : ev.label);
+      state.pending = null;
+      if (!replay) updateStats(elapsed());
       break;
-    case "sources":
-      ev.sources.forEach((s) => addSource(s.url, s.title));
-      setLive("Weighing the results…");
-      break;
+    case "sources": ev.sources.forEach((s) => addSource(s.url, s.title)); break;
     case "fetched": addSource(ev.url, ev.title, true); break;
     case "error":
-      if (state.pending) resolvePending("error", ev.text);
-      else addStep("error", ev.text);
-      report.insertAdjacentHTML("beforeend", `<div class="errbox">${esc(ev.text)}</div>`);
+      if (state.pending) { resolve(state.pending, "error", ev.text); state.pending = null; }
+      else line("error", ev.text);
+      showError(ev.text);
       break;
     case "done": {
       const u = ev.usage || {};
       const tokens = (u.input || 0) + (u.output || 0);
-      addStep("done", `Report ready in ${elapsed()}` + (tokens ? ` · ${fmt(tokens)} tokens` : ""));
+      line("done", `${state.sources.size} sources` + (tokens ? ` · ${tokens.toLocaleString()} tokens` : ""));
       break;
     }
+    case "saved":
+      state.id = ev.id; state.owner = true;
+      history.pushState({}, "", `/r/${ev.id}`);
+      loadHistory().then(() => markActive(ev.id));
+      break;
   }
 }
 
-function finish() {
-  clearInterval(state.timer);
-  state.running = false;
-  cancelAnimationFrame(state.raf);
-  renderReport(true);
-  live.classList.add("hidden");
-  go.disabled = false; go.textContent = "Deploy Scout →";
-  const hasReport = state.buffer.trim().length > 0;
-  $("#copy").disabled = $("#download").disabled = !hasReport;
+function line(kind, text, pending = false) {
+  const [glyph, label, cls] = KIND[kind] || ["·", kind, "muted"];
+  const el = document.createElement("div");
+  el.className = `cli-line ${cls}${pending ? " pending" : ""}`;
+  el.innerHTML = `<span class="g"></span><span class="k"></span><span class="v"></span>`;
+  el.children[0].textContent = glyph; el.children[1].textContent = label; el.children[2].textContent = text;
+  traceEl.appendChild(el);
+  traceEl.scrollTop = traceEl.scrollHeight;
+  return el;
+}
+function resolve(el, kind, text) {
+  const [glyph, label, cls] = KIND[kind] || ["·", kind, ""];
+  el.className = `cli-line ${cls}`;
+  el.children[0].textContent = glyph; el.children[1].textContent = label; el.children[2].textContent = text;
 }
 
-/* ---------- timeline ---------- */
-function addStep(kind, text, pending = false) {
-  const li = document.createElement("li");
-  li.className = kind + (pending ? " pending" : "");
-  li.innerHTML = `<div class="ic">${ICONS[kind] || "•"}</div><div class="k">${LABELS[kind] || kind}</div><div class="v"></div>`;
-  li.querySelector(".v").textContent = text;
-  timeline.appendChild(li);
-  li.scrollIntoView({ block: "nearest" });
-  return li;
-}
-function resolvePending(kind, label) {
-  const li = state.pending;
-  if (!li) { if (kind !== "error") addStep(kind, label); return; }
-  li.className = kind;
-  li.querySelector(".ic").textContent = ICONS[kind] || "•";
-  li.querySelector(".k").textContent = LABELS[kind] || kind;
-  li.querySelector(".v").textContent = kind === "read" ? prettyUrl(label) : label;
-  state.pending = null;
-}
-// Text written between tool calls is the agent narrating - move it to the trace.
-function flushNote() {
-  const text = state.buffer.trim();
-  if (text) addStep("note", clip(text.replace(/[#*`>]/g, ""), 320));
-  state.buffer = "";
-  renderReport();
-}
-
-/* ---------- sources ---------- */
 function addSource(url, title, read = false) {
   if (!url) return;
-  const existing = state.sources.get(url);
-  if (existing) {
-    if (read && !existing.querySelector(".read-badge")) existing.querySelector("a").insertAdjacentHTML("beforeend", `<span class="read-badge">READ</span>`);
-    return;
-  }
-  let host = ""; try { host = new URL(url).hostname; } catch {}
+  const found = state.sources.get(url);
+  if (found) { if (read) markRead(found); return; }
   const li = document.createElement("li");
-  li.innerHTML = `<a target="_blank" rel="noopener"><img alt="" loading="lazy"><span class="t"></span>${read ? '<span class="read-badge">READ</span>' : ""}</a>`;
-  const a = li.querySelector("a"); a.href = url; a.title = url;
-  li.querySelector("img").src = `https://www.google.com/s2/favicons?domain=${encodeURIComponent(host)}&sz=32`;
-  li.querySelector(".t").textContent = title || host;
+  li.innerHTML = `<a target="_blank" rel="noopener"><span class="host"></span><span class="t"></span></a>`;
+  const a = li.firstElementChild; a.href = url; a.title = title ? `${title}\n${url}` : url;
+  a.querySelector(".host").textContent = hostOf(url);
+  a.querySelector(".t").textContent = title || url;
+  if (read) markRead(li);
   sourcesEl.appendChild(li);
   state.sources.set(url, li);
-  $("#st-src").textContent = state.sources.size;
+  $("#src-n").textContent = state.sources.size;
+}
+function markRead(li) {
+  if (li.querySelector(".badge")) return;
+  li.firstElementChild.insertAdjacentHTML("beforeend", `<span class="badge">READ</span>`);
+  sourcesEl.prepend(li);
 }
 
-/* ---------- report ---------- */
+/* ---------- report rendering ---------- */
 function scheduleRender() {
   if (state.raf) return;
   state.raf = requestAnimationFrame(() => { state.raf = 0; renderReport(); });
@@ -170,7 +236,7 @@ function renderReport(final = false) {
   report.innerHTML = md ? DOMPurify.sanitize(marked.parse(md)) : "";
   report.querySelectorAll("a").forEach((a) => { a.target = "_blank"; a.rel = "noopener"; });
   report.classList.toggle("writing", !final && md.length > 0);
-  if (final) enhance();
+  if (final && md) enhance();
 }
 function enhance() {
   const h2s = [...report.querySelectorAll("h2")];
@@ -181,43 +247,88 @@ function enhance() {
     while (n && n.tagName !== "H2") { const next = n.nextElementSibling; box.appendChild(n); n = next; }
     tldr.after(box);
   }
-  const m = state.buffer.match(/Confidence:\s*\**\s*(\d{1,3})\s*\/\s*100/i);
+  const m = state.buffer.match(/Confidence:?\s*\**\s*(\d{1,3})\s*\/\s*100/i);
   if (m) {
     const p = Math.min(100, +m[1]);
-    const ring = $("#confidence .ring");
-    ring.style.setProperty("--p", p);
-    ring.style.setProperty("--ring", p >= 70 ? "var(--ok)" : p >= 40 ? "var(--warn)" : "var(--err)");
-    ring.querySelector("span").textContent = p;
+    $("#conf-n").textContent = p;
     $("#confidence").classList.remove("hidden");
+    requestAnimationFrame(() => ($("#conf-bar").style.width = p + "%"));
   }
   const fu = h2s.find((h) => /follow[- ]?up/i.test(h.textContent));
   const list = fu?.nextElementSibling;
-  if (list && list.tagName === "UL") {
+  if (list && (list.tagName === "UL" || list.tagName === "OL")) {
     const wrap = document.createElement("div"); wrap.className = "followups";
     [...list.querySelectorAll("li")].forEach((li) => {
-      const b = document.createElement("button"); b.type = "button"; b.textContent = "↳ " + li.textContent.trim();
-      b.onclick = () => { q.value = li.textContent.trim(); window.scrollTo({ top: 0, behavior: "smooth" }); form.requestSubmit(); };
+      const text = li.textContent.trim();
+      const b = document.createElement("button"); b.type = "button"; b.className = "chip"; b.textContent = text;
+      b.onclick = () => { if (state.running) return; history.pushState({}, "", "/app"); showComposer(); q.value = text; form.requestSubmit(); };
       wrap.appendChild(b);
     });
     list.replaceWith(wrap);
   }
 }
 
-$("#copy").onclick = async () => {
-  await navigator.clipboard.writeText(state.buffer);
-  $("#copy").textContent = "Copied ✓"; setTimeout(() => ($("#copy").textContent = "Copy"), 1500);
-};
+/* ---------- history ---------- */
+async function loadHistory() {
+  const res = await api("/api/reports").catch(() => null);
+  const items = res && res.ok ? await res.json() : [];
+  const ul = $("#history");
+  ul.innerHTML = "";
+  items.forEach((r) => {
+    const li = document.createElement("li");
+    li.innerHTML = `<a><span class="q"></span><span class="d"></span></a>`;
+    const a = li.firstElementChild;
+    a.href = `/r/${r.id}`; a.dataset.id = r.id;
+    a.querySelector(".q").textContent = r.question;
+    a.querySelector(".d").textContent = `${r.depth} · ${fmtDate(r.created_at)}`;
+    a.onclick = (e) => { e.preventDefault(); if (state?.running) return; history.pushState({}, "", a.href); openReport(r.id); };
+    ul.appendChild(li);
+  });
+  $("#history-empty").classList.toggle("hidden", items.length > 0);
+  if (state?.id) markActive(state.id);
+}
+function markActive(id) {
+  document.querySelectorAll("#history a").forEach((a) => a.classList.toggle("active", a.dataset.id === id));
+}
+
+/* ---------- actions ---------- */
+function setActions(on) {
+  $("#copy").disabled = $("#download").disabled = !on;
+  $("#share").disabled = !(on && state.id);
+  $("#delete").classList.toggle("hidden", !(state.id && state.owner));
+}
+$("#share").onclick = () => copyText(`${location.origin}/r/${state.id}`, "Share link copied");
+$("#copy").onclick = () => copyText(state.buffer, "Report copied");
 $("#download").onclick = () => {
-  const blob = new Blob([`# ${$("#report-title").textContent}\n\n${state.buffer}`], { type: "text/markdown" });
-  const a = Object.assign(document.createElement("a"), { href: URL.createObjectURL(blob), download: "xerien-scout-report.md" });
-  a.click(); URL.revokeObjectURL(a.href);
+  const md = `# ${state.question}\n\n${state.buffer}\n`;
+  const a = Object.assign(document.createElement("a"), {
+    href: URL.createObjectURL(new Blob([md], { type: "text/markdown" })),
+    download: `${slug(state.question)}.md`,
+  });
+  a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+};
+$("#delete").onclick = async () => {
+  if (!state.id || !confirm("Delete this report? The share link will stop working.")) return;
+  const res = await api(`/api/reports/${state.id}`, { method: "DELETE" });
+  if (!res.ok) return toast("Couldn't delete the report");
+  toast("Report deleted");
+  history.pushState({}, "", "/app"); showComposer(); loadHistory();
 };
 
+async function copyText(text, msg) {
+  try { await navigator.clipboard.writeText(text); toast(msg); } catch { toast("Copy failed"); }
+}
+function toast(msg) {
+  const t = $("#toast"); t.textContent = msg; t.classList.remove("hidden");
+  clearTimeout(toast.t); toast.t = setTimeout(() => t.classList.add("hidden"), 1800);
+}
+function showError(text) { const e = $("#error"); e.textContent = text; e.classList.remove("hidden"); }
+
 /* ---------- utils ---------- */
-function setLive(t) { live.classList.remove("hidden"); liveText.textContent = t; }
-function updateStats() { $("#st-search").textContent = state.searches; $("#st-read").textContent = state.reads; }
+function updateStats(time) { $("#stats").textContent = `${state.searches} search · ${state.reads} read · ${time}`; }
 function elapsed() { return ((performance.now() - state.t0) / 1000).toFixed(1) + "s"; }
 function clip(s, n) { return s.length > n ? s.slice(0, n - 1) + "…" : s; }
-function fmt(n) { return Number.isFinite(n) ? n.toLocaleString() : "0"; }
-function esc(s) { return s.replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]); }
-function prettyUrl(u) { try { const x = new URL(u); return x.hostname + x.pathname.replace(/\/$/, ""); } catch { return u; } }
+function hostOf(u) { try { return new URL(u).hostname.replace(/^www\./, ""); } catch { return ""; } }
+function prettyUrl(u) { try { const x = new URL(u); return x.hostname.replace(/^www\./, "") + x.pathname.replace(/\/$/, ""); } catch { return u; } }
+function fmtDate(ts) { return new Date(ts * 1000).toLocaleDateString(undefined, { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" }); }
+function slug(s) { return s.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 60) || "report"; }

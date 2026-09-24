@@ -4,76 +4,121 @@
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <title>Xerien Scout</title>
-<meta name="description" content="An autonomous AI research agent that plans, searches, reads and writes cited reports - live." />
+<meta name="description" content="Xerien Scout is an autonomous research agent. It plans, searches the web, reads the sources and writes a cited report in minutes." />
 <link rel="preconnect" href="https://fonts.googleapis.com" />
-<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;450;500&family=Geist+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
 <link rel="stylesheet" href="/static/styles.css" />
-<script src="/static/vendor/marked.min.js"></script>
-<script src="/static/vendor/purify.min.js"></script>
+<link rel="stylesheet" href="/static/landing.css" />
 </head>
 <body>
-<div class="glow"></div>
-<header class="top">
-  <div class="brand">
-    <div class="logo">✦</div>
-    <div>
-      <h1>Xerien <span>Scout</span></h1>
-      <p>Autonomous research agent</p>
+<nav class="nav">
+  <div class="wrap">
+    <a class="mark" href="/"><i>◆</i>Xerien</a>
+    <div class="nav-links">
+      <a href="#how">How it works</a>
+      <a href="#features">Features</a>
+    </div>
+    <div class="nav-right">
+      <a class="btn btn-primary btn-sm pill" href="/app">Open Scout</a>
     </div>
   </div>
-  <div id="mode" class="pill">connecting…</div>
+</nav>
+
+<header class="wrap hero">
+  <div class="hero-copy">
+    <p class="eyebrow">Autonomous research agent</p>
+    <h1 class="display">Research that reads the internet for you.</h1>
+    <p class="lead">Ask a question. Scout plans the research, searches the web, reads the sources in full and writes a report with citations and a confidence score. You can watch every step as it happens.</p>
+    <div class="hero-cta">
+      <a class="btn btn-primary" href="/app">Start researching</a>
+      <a class="btn btn-ghost" href="#how">How it works</a>
+    </div>
+  </div>
+
+  <div class="cli hero-cli" aria-label="Example of an agent trace">
+    <div class="cli-head"><span class="eyebrow muted" style="margin:0">Agent trace</span><span class="eyebrow muted" style="margin:0">Example</span></div>
+    <div class="cli-body">
+      <div class="cli-line"><span class="g">◆</span><span class="k">Ask</span><span class="v">What are the biggest risks for Solana DeFi in 2026?</span></div>
+      <div class="cli-line muted"><span class="g">·</span><span class="k">Plan</span><span class="v">Map exploit history, check liquidity trends, read audits.</span></div>
+      <div class="cli-line"><span class="g">◆</span><span class="k">Search</span><span class="v">solana defi exploits 2026</span></div>
+      <div class="cli-line"><span class="g">◆</span><span class="k">Search</span><span class="v">solana TVL concentration top protocols</span></div>
+      <div class="cli-line"><span class="g">◆</span><span class="k">Read</span><span class="v">defillama.com/chain/Solana</span></div>
+      <div class="cli-line muted"><span class="g">·</span><span class="k">Note</span><span class="v">TVL is concentrated. Next: validate with audit reports.</span></div>
+      <div class="cli-line"><span class="g">◆</span><span class="k">Read</span><span class="v">a security firm's quarterly report</span></div>
+      <div class="cli-line ok"><span class="g">✓</span><span class="k">Report</span><span class="v">5 findings · 11 sources · confidence 74/100</span></div>
+    </div>
+  </div>
 </header>
 
-<main>
-  <section class="hero" id="hero">
-    <h2>Ask anything. <em>Watch it think.</em></h2>
-    <p>Scout plans its research, searches the web, reads the best sources and writes a cited report, and you can watch every step as it happens.</p>
-  </section>
-
-  <form id="ask" class="ask">
-    <textarea id="q" rows="2" placeholder="e.g. What are the biggest risks for Solana DeFi in 2026?" required></textarea>
-    <div class="ask-row">
-      <div class="seg" role="radiogroup" aria-label="Depth">
-        <label><input type="radio" name="depth" value="quick" checked /><span>⚡ Quick</span></label>
-        <label><input type="radio" name="depth" value="deep" /><span>🔬 Deep</span></label>
-      </div>
-      <button id="go" type="submit">Deploy Scout →</button>
-    </div>
-  </form>
-
-  <div class="examples" id="examples">
-    <button type="button">Compare the top AI agent frameworks right now</button>
-    <button type="button">Is ETH or SOL better positioned for the next 12 months?</button>
-    <button type="button">What happened in AI this week?</button>
+<section id="how" class="wrap section">
+  <p class="eyebrow">How it works</p>
+  <h2 class="h-lg section-title">An agent, not a chatbot.</h2>
+  <div class="grid-3">
+    <article class="card step">
+      <span class="step-n mono">01</span>
+      <h3 class="h">Plan</h3>
+      <p class="body">Scout breaks your question into angles to investigate and decides what evidence would answer it.</p>
+    </article>
+    <article class="card step">
+      <span class="step-n mono">02</span>
+      <h3 class="h">Search &amp; read</h3>
+      <p class="body">It runs several web searches and opens the best pages in full. It keeps going until the evidence holds up, then stops.</p>
+    </article>
+    <article class="card step">
+      <span class="step-n mono">03</span>
+      <h3 class="h">Report</h3>
+      <p class="body">You get a TL;DR, cited findings, analysis, risks, a 0–100 confidence score and three follow-up questions.</p>
+    </article>
   </div>
+</section>
 
-  <section id="run" class="run hidden">
-    <aside class="panel timeline-panel">
-      <div class="panel-head">
-        <h3>Agent trace</h3>
-        <div class="stats"><span id="st-search">0</span> searches · <span id="st-read">0</span> reads · <span id="st-time">0.0s</span></div>
-      </div>
-      <ol id="timeline" class="timeline"></ol>
-      <div class="panel-head sub"><h3>Sources</h3><span id="st-src" class="muted">0</span></div>
-      <ul id="sources" class="sources"></ul>
-    </aside>
-
-    <article class="panel report-panel">
-      <div class="panel-head">
-        <h3 id="report-title">Report</h3>
-        <div class="actions">
-          <div id="confidence" class="confidence hidden"><div class="ring"><span></span></div><small>confidence</small></div>
-          <button id="copy" class="ghost" disabled>Copy</button>
-          <button id="download" class="ghost" disabled>.md</button>
+<section id="features" class="wrap section">
+  <p class="eyebrow">Features</p>
+  <h2 class="h-lg section-title">Built to be trusted.</h2>
+  <div class="grid-2">
+    <article class="card feature">
+      <h3 class="h">Live agent trace</h3>
+      <p class="body">Every search, page read and reasoning note streams to your screen as it happens. You can see why Scout reached its answer.</p>
+      <div class="cli mini">
+        <div class="cli-body">
+          <div class="cli-line"><span class="g">◆</span><span class="k">Search</span><span class="v">eu ai act enforcement timeline</span></div>
+          <div class="cli-line"><span class="g">◆</span><span class="k">Read</span><span class="v">eur-lex.europa.eu</span></div>
+          <div class="cli-line ok"><span class="g">✓</span><span class="k">Done</span><span class="v">42.8s · 6 sources</span></div>
         </div>
       </div>
-      <div id="live" class="live hidden"><span class="dot"></span><span id="live-text">Thinking…</span></div>
-      <div id="report" class="report"></div>
     </article>
-  </section>
-</main>
+    <article class="card feature">
+      <h3 class="h">Every claim is cited</h3>
+      <p class="body">Each finding links to the page it came from. Pages Scout read in full are marked separately from search results it only skimmed.</p>
+      <div class="cli mini">
+        <div class="cli-body">
+          <div class="cli-line ok"><span class="g">✓</span><span class="k">Read</span><span class="v">Primary source, read in full</span></div>
+          <div class="cli-line muted"><span class="g">·</span><span class="k">Found</span><span class="v">Search result, snippet only</span></div>
+        </div>
+      </div>
+    </article>
+    <article class="card feature">
+      <h3 class="h">Confidence, not certainty</h3>
+      <p class="body">Scout scores its own confidence and lists the risks and unknowns, so you know how far to trust the answer.</p>
+    </article>
+    <article class="card inverted feature">
+      <h3 class="h">Share in one click</h3>
+      <p class="body" style="color:#c9c9c9">Every report is saved to your history and gets a public link you can send to your team.</p>
+      <a class="btn btn-ghost invert" href="/app">Try it now →</a>
+    </article>
+  </div>
+</section>
 
-<footer>Built for the Orion Agents Hackathon · Powered by Claude with web search &amp; web fetch</footer>
-<script src="/static/app.js"></script>
+<section class="wrap section cta">
+  <div class="spectrum"></div>
+  <h2 class="h-lg">Ask your first question.</h2>
+  <p class="lead">No sign-up. Your history is kept in this browser's workspace.</p>
+  <a class="btn btn-primary" href="/app">Open Scout</a>
+</section>
+
+<footer class="wrap footer">
+  <span class="mark"><i>◆</i>Xerien</span>
+  <span class="mono">Built for the Orion Agents Hackathon</span>
+</footer>
 </body>
 </html>

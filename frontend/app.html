@@ -1,0 +1,107 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Scout Dashboard</title>
+<meta name="description" content="Run autonomous research with Xerien Scout and keep every cited report in one place." />
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;450;500&family=Geist+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
+<link rel="stylesheet" href="/static/styles.css" />
+<link rel="stylesheet" href="/static/dashboard.css" />
+<script src="/static/vendor/marked.min.js"></script>
+<script src="/static/vendor/purify.min.js"></script>
+</head>
+<body>
+<nav class="nav">
+  <div class="wrap wide">
+    <a class="mark" href="/"><i>◆</i>Xerien</a>
+    <span class="crumb mono">/ Scout</span>
+    <div class="nav-right">
+      <span id="status" class="tag"><span class="dot"></span><span>Checking</span></span>
+      <button id="history-toggle" class="btn btn-ghost btn-sm mobile-only" type="button">History</button>
+      <button id="new" class="btn btn-primary btn-sm pill" type="button">New research</button>
+    </div>
+  </div>
+</nav>
+
+<div class="dash wrap wide">
+  <aside id="sidebar" class="sidebar">
+    <p class="eyebrow muted">History</p>
+    <ul id="history" class="history"></ul>
+    <p id="history-empty" class="body small">Your reports will show up here.</p>
+  </aside>
+
+  <main class="main">
+    <!-- Composer -->
+    <section id="composer" class="composer">
+      <p class="eyebrow">New research</p>
+      <h1 class="h-lg">What should Scout investigate?</h1>
+      <form id="ask" class="card ask">
+        <textarea id="q" rows="3" maxlength="2000" placeholder="Ask a question that needs real research, e.g. How exposed are stablecoin issuers to US Treasury yields?" required></textarea>
+        <div class="ask-row">
+          <div class="seg" role="radiogroup" aria-label="Depth">
+            <label><input type="radio" name="depth" value="quick" checked /><span>Quick</span></label>
+            <label><input type="radio" name="depth" value="deep" /><span>Deep</span></label>
+          </div>
+          <span class="hint mono">⏎ to run · ⇧⏎ new line</span>
+          <button id="go" class="btn btn-primary" type="submit">Run Scout</button>
+        </div>
+      </form>
+      <div id="examples" class="examples">
+        <button type="button" class="chip">Compare the top AI agent frameworks right now</button>
+        <button type="button" class="chip">Is ETH or SOL better positioned for the next 12 months?</button>
+        <button type="button" class="chip">What changed in AI this week?</button>
+      </div>
+    </section>
+
+    <!-- Run / report view -->
+    <section id="run" class="run hidden">
+      <header class="run-head">
+        <div class="run-title">
+          <p id="run-meta" class="eyebrow muted"></p>
+          <h1 id="run-q" class="h"></h1>
+        </div>
+        <div class="run-actions">
+          <button id="share" class="btn btn-ghost btn-sm" type="button" disabled>Share</button>
+          <button id="copy" class="btn btn-ghost btn-sm" type="button" disabled>Copy</button>
+          <button id="download" class="btn btn-ghost btn-sm" type="button" disabled>Export .md</button>
+          <button id="delete" class="btn btn-ghost btn-sm hidden" type="button">Delete</button>
+        </div>
+      </header>
+
+      <div class="run-grid">
+        <article class="card report-card">
+          <div id="error" class="errbox hidden"></div>
+          <div id="report" class="report"></div>
+        </article>
+
+        <aside class="side">
+          <div class="cli">
+            <div class="cli-head">
+              <span class="eyebrow muted" style="margin:0">Agent trace</span>
+              <span id="stats" class="eyebrow muted" style="margin:0">0 search · 0 read · 0.0s</span>
+            </div>
+            <div id="trace" class="cli-body trace"></div>
+          </div>
+
+          <div id="confidence" class="card conf hidden">
+            <p class="eyebrow muted">Confidence</p>
+            <div class="conf-row"><span id="conf-n" class="conf-n mono">0</span><span class="mono conf-of">/100</span></div>
+            <div class="bar"><span id="conf-bar"></span></div>
+          </div>
+
+          <div class="card">
+            <div class="side-head"><p class="eyebrow muted" style="margin:0">Sources</p><span id="src-n" class="mono small">0</span></div>
+            <ul id="sources" class="sources"></ul>
+          </div>
+        </aside>
+      </div>
+    </section>
+  </main>
+</div>
+
+<div id="toast" class="toast hidden" role="status"></div>
+<script src="/static/app.js"></script>
+</body>
+</html>
