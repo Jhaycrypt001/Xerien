@@ -122,8 +122,26 @@ async def run_research(question: str, depth: str = "quick") -> AsyncIterator[dic
     yield {"type": "status", "text": f"Scout deployed on {MODEL} ({depth} mode)"}
 
     usage = {"input": 0, "output": 0, "searches": 0, "fetches": 0}
+    compat = False
     for _ in range(MAX_CONTINUATIONS):
-        async with client.beta.messages.stream(messages=messages, **request) as stream:
+        stream_cm = client.beta.messages.stream(messages=messages, **request)
+        try:
+            stream = await stream_cm.__aenter__()
+        except anthropic.BadRequestError:
+            # Some orgs/models lack the refusal-fallback beta or the newest web tool
+            # versions. Retry once, before any output, with the widely available set.
+            if compat:
+                raise
+            compat = True
+            request.pop("fallbacks", None)
+            request["betas"] = ["web-fetch-2025-09-10"]
+            request["tools"] = [
+                {"type": "web_search_20250305", "name": "web_search", "max_uses": max_searches},
+                {"type": "web_fetch_20250910", "name": "web_fetch", "max_uses": max_fetches},
+            ]
+            stream_cm = client.beta.messages.stream(messages=messages, **request)
+            stream = await stream_cm.__aenter__()
+        try:
             async for event in stream:
                 if event.type == "content_block_delta" and event.delta.type == "text_delta":
                     yield {"type": "token", "text": event.delta.text}
@@ -134,6 +152,8 @@ async def run_research(question: str, depth: str = "quick") -> AsyncIterator[dic
                     if step:
                         yield step
             response = await stream.get_final_message()
+        finally:
+            await stream_cm.__aexit__(None, None, None)
 
         usage["input"] += response.usage.input_tokens
         usage["output"] += response.usage.output_tokens

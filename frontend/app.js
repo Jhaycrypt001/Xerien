@@ -8,19 +8,10 @@ const KIND = {
   fetched: ["✓", "Read", "ok"], done: ["✓", "Done", "ok"], error: ["×", "Error", "err"],
 };
 
-/* ---------- workspace: anonymous per-browser identity for history ---------- */
-const WORKSPACE = (() => {
-  let id = null;
-  try { id = localStorage.getItem("xerien.workspace"); } catch {}
-  if (!id || !/^[A-Za-z0-9-]{16,64}$/.test(id)) {
-    id = crypto.randomUUID ? crypto.randomUUID() : Array.from(crypto.getRandomValues(new Uint8Array(16)), (b) => b.toString(16).padStart(2, "0")).join("");
-    try { localStorage.setItem("xerien.workspace", id); } catch {}
-  }
-  return id;
-})();
-const api = (path, opts = {}) => fetch(path, { ...opts, headers: { "X-Workspace": WORKSPACE, ...(opts.headers || {}) } });
+const api = (path, opts = {}) => fetch(path, opts);
 
 let state = null;
+let account = null; // { account, chain, address } when signed in
 
 /* ---------- boot ---------- */
 api("/api/health").then((r) => r.json()).then((h) => {
@@ -30,13 +21,59 @@ api("/api/health").then((r) => r.json()).then((h) => {
   s.title = h.configured ? `Model: ${h.model}` : "The server has no ANTHROPIC_API_KEY";
 }).catch(() => {});
 
-loadHistory();
-route();
+XerienWallet.me().then((m) => { setAccount(m); route(); });
 window.addEventListener("popstate", route);
 
 function route() {
   const m = location.pathname.match(/^\/r\/([\w-]+)/);
-  if (m) openReport(m[1]); else showComposer();
+  if (m) openReport(m[1]); else if (account) showComposer(); else showGate();
+}
+
+/* ---------- account ---------- */
+function setAccount(m) {
+  account = m;
+  $("#signin").classList.toggle("hidden", Boolean(m));
+  $("#account").classList.toggle("hidden", !m);
+  $("#new").classList.toggle("hidden", !m);
+  if (m) {
+    $("#acct-addr").textContent = XerienWallet.short(m.address);
+    $("#acct-full").textContent = m.address;
+    $("#acct-chain").textContent = m.chain === "solana" ? "Solana wallet" : "EVM wallet";
+  }
+  $("#history-locked").classList.toggle("hidden", Boolean(m));
+  if (m) loadHistory(); else { $("#history").innerHTML = ""; $("#history-empty").classList.add("hidden"); }
+}
+async function signIn() {
+  try {
+    setAccount(await XerienWallet.signIn());
+    return true;
+  } catch { return false; }
+}
+$("#signin").onclick = $("#gate-btn").onclick = async () => {
+  if (await signIn() && !location.pathname.startsWith("/r/")) showComposer();
+};
+$("#acct-btn").onclick = (e) => {
+  e.stopPropagation();
+  const menu = $("#acct-menu"), open = menu.classList.toggle("hidden") === false;
+  $("#acct-btn").setAttribute("aria-expanded", String(open));
+};
+document.addEventListener("click", (e) => { if (!e.target.closest("#account")) $("#acct-menu").classList.add("hidden"); });
+$("#acct-copy").onclick = () => { $("#acct-menu").classList.add("hidden"); copyText(account.address, "Address copied"); };
+$("#acct-out").onclick = async () => {
+  $("#acct-menu").classList.add("hidden");
+  await XerienWallet.signOut().catch(() => {});
+  setAccount(null);
+  if (state) state.owner = false;
+  if (location.pathname.startsWith("/r/")) setActions(Boolean(state && state.buffer.trim()));
+  else showGate();
+  toast("Signed out");
+};
+
+function showGate() {
+  $("#gate").classList.remove("hidden");
+  $("#composer").classList.add("hidden");
+  $("#run").classList.add("hidden");
+  document.title = "Scout Dashboard";
 }
 
 /* ---------- composer ---------- */
@@ -52,10 +89,16 @@ form.addEventListener("submit", (e) => {
   if (question.length < 3 || state?.running) return;
   runResearch(question, new FormData(form).get("depth"));
 });
-$("#new").onclick = () => { if (state?.running) return; history.pushState({}, "", "/app"); showComposer(); q.focus(); };
+$("#new").onclick = async () => {
+  if (state?.running) return;
+  if (!account && !(await signIn())) return;
+  history.pushState({}, "", "/app"); showComposer(); q.focus();
+};
 $("#history-toggle").onclick = () => document.body.classList.toggle("show-history");
 
 function showComposer() {
+  if (!account) return showGate();
+  $("#gate").classList.add("hidden");
   $("#composer").classList.remove("hidden");
   $("#run").classList.add("hidden");
   document.title = "Scout Dashboard";
@@ -66,6 +109,7 @@ function showComposer() {
 function resetRun(question, meta) {
   state = { running: false, id: null, owner: false, buffer: "", sources: new Map(), searches: 0, reads: 0, pending: null, raf: 0, t0: performance.now(), question };
   $("#composer").classList.add("hidden");
+  $("#gate").classList.add("hidden");
   $("#run").classList.remove("hidden");
   $("#run-q").textContent = question;
   $("#run-meta").textContent = meta;
@@ -91,6 +135,7 @@ async function runResearch(question, depth) {
       method: "POST", headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ question, depth }),
     });
+    if (res.status === 401) { setAccount(null); throw new Error("Your session expired. Connect your wallet again."); }
     if (!res.ok) {
       const body = await res.json().catch(() => ({}));
       throw new Error(body.detail || `Server returned ${res.status}`);
@@ -261,7 +306,7 @@ function enhance() {
     [...list.querySelectorAll("li")].forEach((li) => {
       const text = li.textContent.trim();
       const b = document.createElement("button"); b.type = "button"; b.className = "chip"; b.textContent = text;
-      b.onclick = () => { if (state.running) return; history.pushState({}, "", "/app"); showComposer(); q.value = text; form.requestSubmit(); };
+      b.onclick = async () => { if (state.running || (!account && !(await signIn()))) return; history.pushState({}, "", "/app"); showComposer(); q.value = text; form.requestSubmit(); };
       wrap.appendChild(b);
     });
     list.replaceWith(wrap);
@@ -270,6 +315,7 @@ function enhance() {
 
 /* ---------- history ---------- */
 async function loadHistory() {
+  if (!account) return;
   const res = await api("/api/reports").catch(() => null);
   const items = res && res.ok ? await res.json() : [];
   const ul = $("#history");
@@ -284,7 +330,7 @@ async function loadHistory() {
     a.onclick = (e) => { e.preventDefault(); if (state?.running) return; history.pushState({}, "", a.href); openReport(r.id); };
     ul.appendChild(li);
   });
-  $("#history-empty").classList.toggle("hidden", items.length > 0);
+  $("#history-empty").classList.toggle("hidden", items.length > 0 || !account);
   if (state?.id) markActive(state.id);
 }
 function markActive(id) {

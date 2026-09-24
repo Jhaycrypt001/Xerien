@@ -20,6 +20,16 @@
     <div class="nav-right">
       <span id="status" class="tag"><span class="dot"></span><span>Checking</span></span>
       <button id="history-toggle" class="btn btn-ghost btn-sm mobile-only" type="button">History</button>
+      <button id="signin" class="btn btn-ghost btn-sm hidden" type="button">Connect wallet</button>
+      <div id="account" class="acct hidden">
+        <button id="acct-btn" class="btn btn-ghost btn-sm mono" type="button" aria-haspopup="menu" aria-expanded="false"><span class="acct-dot"></span><span id="acct-addr"></span></button>
+        <div id="acct-menu" class="acct-menu card hidden" role="menu">
+          <p id="acct-chain" class="eyebrow muted" style="margin:0 0 4px"></p>
+          <p id="acct-full" class="mono acct-full"></p>
+          <button id="acct-copy" class="acct-item" type="button" role="menuitem">Copy address</button>
+          <button id="acct-out" class="acct-item" type="button" role="menuitem">Sign out</button>
+        </div>
+      </div>
       <button id="new" class="btn btn-primary btn-sm pill" type="button">New research</button>
     </div>
   </div>
@@ -30,9 +40,18 @@
     <p class="eyebrow muted">History</p>
     <ul id="history" class="history"></ul>
     <p id="history-empty" class="body small">Your reports will show up here.</p>
+    <p id="history-locked" class="body small hidden">Connect your wallet to see your history.</p>
   </aside>
 
   <main class="main">
+    <!-- Sign-in gate -->
+    <section id="gate" class="composer hidden">
+      <p class="eyebrow">Sign in</p>
+      <h1 class="h-lg">Connect your wallet to use Scout.</h1>
+      <p class="lead gate-lead">Your wallet is your account. Your reports are saved to it, and signing in costs nothing.</p>
+      <button id="gate-btn" class="btn btn-primary" type="button">Connect wallet</button>
+    </section>
+
     <!-- Composer -->
     <section id="composer" class="composer">
       <p class="eyebrow">New research</p>
@@ -102,6 +121,7 @@
 </div>
 
 <div id="toast" class="toast hidden" role="status"></div>
+<script src="/static/wallet.js"></script>
 <script src="/static/app.js"></script>
 </body>
 </html>

@@ -125,3 +125,12 @@
   .wrap { padding: 0 16px; }
   .nav .wrap { gap: 12px; }
 }
+
+/* ---------- account ---------- */
+.acct { position: relative; }
+.acct-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--green); }
+.acct-menu { position: absolute; right: 0; top: 40px; width: 260px; padding: 12px; z-index: 30; display: grid; gap: 2px; }
+.acct-full { font-size: 12px; color: var(--charcoal); overflow-wrap: anywhere; margin: 0 0 8px; }
+.acct-item { text-align: left; border: 0; background: transparent; padding: 8px; border-radius: 4px; font-size: 14px; color: var(--charcoal); }
+.acct-item:hover { background: var(--paper); color: var(--obsidian); }
+.gate-lead { margin: -8px 0 32px; max-width: 520px; }
