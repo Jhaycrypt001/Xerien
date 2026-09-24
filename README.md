@@ -160,7 +160,7 @@ Liquidity and 24h change for EVM tokens come from DexScreener `/tokens/v1/{chain
 | Output cap | 64,000 tokens (streamed) | 16,384 tokens |
 | Citations | Inline Markdown links written by the model | Inserted **after** generation from `grounding_supports` |
 | Long runs | Continues automatically on `pause_turn`, up to 6 times | One streamed call |
-| Fallbacks | Server-side refusal fallback. If a newer beta or tool version is rejected with a 400 before any output, it retries once with `web_search_20250305` / `web_fetch_20250910` | A 404 (retired model) triggers one fresh model discovery. A 400 steps down from Search + URL context, to Search only, to no web tools (announced in the trace) |
+| Fallbacks | Server-side refusal fallback. If a newer beta or tool version is rejected with a 400 before any output, it retries once with `web_search_20250305` / `web_fetch_20250910` | A 404 (retired model) triggers one fresh model discovery. A 429 moves to the next candidate model (Flash, then Flash-Lite), waiting once if the reset is under 8s. A 400 steps down from Search + URL context, to Search only, to no web tools (announced in the trace). The working combination is remembered for 30 minutes |
 
 **Gemini citation insertion.** Gemini returns `grounding_supports[]`, where each item has a `segment.end_index` and the indices of the sources that support it. The offsets are **UTF-8 byte** offsets, not character offsets, so the text is encoded, `[n](uri)` links are inserted from the last position to the first so earlier offsets stay valid, and the result is decoded again. The cited report replaces the streamed text through a `report` event.
 
@@ -381,4 +381,5 @@ python -m backend & curl localhost:8000/api/health
 | Vendored DOMPurify 3.1.6 affected by CVE-2025-26791 | Old pinned version | Upgraded to 3.4.16 (and marked to 15.0.12) |
 | Bundled markdown libraries failed to load in restricted networks | CDN dependency | Libraries vendored into `frontend/vendor/` |
 | Live Gemini runs failed with `404` | `gemini-2.5-flash` is no longer offered to new API keys | Model auto-discovery from the models API, with rediscovery on 404 |
+| Live Gemini runs failed with `429` | Free keys often have zero quota for Search grounding on the newest Flash model | Walk the candidate models (Flash, then Flash-Lite), wait once for short per-minute limits, fall back to no web tools as a last resort, and remember the working model for 30 minutes |
 | Signed-in mobile navbar was wider than the screen | Too many labelled buttons | Compact labels and icons; History moved to its own `/history` page |
