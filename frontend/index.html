@@ -1,0 +1,79 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Xerien Scout</title>
+<meta name="description" content="An autonomous AI research agent that plans, searches, reads and writes cited reports - live." />
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+<link rel="stylesheet" href="/static/styles.css" />
+<script src="/static/vendor/marked.min.js"></script>
+<script src="/static/vendor/purify.min.js"></script>
+</head>
+<body>
+<div class="glow"></div>
+<header class="top">
+  <div class="brand">
+    <div class="logo">✦</div>
+    <div>
+      <h1>Xerien <span>Scout</span></h1>
+      <p>Autonomous research agent</p>
+    </div>
+  </div>
+  <div id="mode" class="pill">connecting…</div>
+</header>
+
+<main>
+  <section class="hero" id="hero">
+    <h2>Ask anything. <em>Watch it think.</em></h2>
+    <p>Scout plans its research, searches the web, reads the best sources and writes a cited report, and you can watch every step as it happens.</p>
+  </section>
+
+  <form id="ask" class="ask">
+    <textarea id="q" rows="2" placeholder="e.g. What are the biggest risks for Solana DeFi in 2026?" required></textarea>
+    <div class="ask-row">
+      <div class="seg" role="radiogroup" aria-label="Depth">
+        <label><input type="radio" name="depth" value="quick" checked /><span>⚡ Quick</span></label>
+        <label><input type="radio" name="depth" value="deep" /><span>🔬 Deep</span></label>
+      </div>
+      <button id="go" type="submit">Deploy Scout →</button>
+    </div>
+  </form>
+
+  <div class="examples" id="examples">
+    <button type="button">Compare the top AI agent frameworks right now</button>
+    <button type="button">Is ETH or SOL better positioned for the next 12 months?</button>
+    <button type="button">What happened in AI this week?</button>
+  </div>
+
+  <section id="run" class="run hidden">
+    <aside class="panel timeline-panel">
+      <div class="panel-head">
+        <h3>Agent trace</h3>
+        <div class="stats"><span id="st-search">0</span> searches · <span id="st-read">0</span> reads · <span id="st-time">0.0s</span></div>
+      </div>
+      <ol id="timeline" class="timeline"></ol>
+      <div class="panel-head sub"><h3>Sources</h3><span id="st-src" class="muted">0</span></div>
+      <ul id="sources" class="sources"></ul>
+    </aside>
+
+    <article class="panel report-panel">
+      <div class="panel-head">
+        <h3 id="report-title">Report</h3>
+        <div class="actions">
+          <div id="confidence" class="confidence hidden"><div class="ring"><span></span></div><small>confidence</small></div>
+          <button id="copy" class="ghost" disabled>Copy</button>
+          <button id="download" class="ghost" disabled>.md</button>
+        </div>
+      </div>
+      <div id="live" class="live hidden"><span class="dot"></span><span id="live-text">Thinking…</span></div>
+      <div id="report" class="report"></div>
+    </article>
+  </section>
+</main>
+
+<footer>Built for the Orion Agents Hackathon · Powered by Claude with web search &amp; web fetch</footer>
+<script src="/static/app.js"></script>
+</body>
+</html>
