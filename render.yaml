@@ -4,7 +4,7 @@ services:
     runtime: python
     plan: free
     buildCommand: pip install -r requirements.txt
-    startCommand: uvicorn backend.app:app --host 0.0.0.0 --port $PORT --proxy-headers --forwarded-allow-ips "*"
+    startCommand: python -m backend
     healthCheckPath: /api/health
     envVars:
       # Set one of these. Gemini has a free tier; Claude gives deeper research.
