@@ -26,13 +26,29 @@ window.addEventListener("popstate", route);
 
 function route() {
   const m = location.pathname.match(/^\/r\/([\w-]+)/);
-  if (m) openReport(m[1]); else if (account) showComposer(); else showGate();
+  if (m) openReport(m[1]);
+  else if (!account) showGate();
+  else if (location.pathname === "/history") showHistoryPage();
+  else showComposer();
+}
+function navigate(path) {
+  if (state?.running) return toast("Wait for the current run to finish");
+  if (location.pathname !== path) history.pushState({}, "", path);
+  route();
+}
+const VIEWS = ["#gate", "#composer", "#run", "#history-page"];
+function showView(sel) {
+  VIEWS.forEach((v) => $(v).classList.toggle("hidden", v !== sel));
+  $("#history-link").classList.toggle("active", sel === "#history-page");
+  window.scrollTo({ top: 0 });
 }
 
 /* ---------- account ---------- */
 function setAccount(m) {
   account = m;
   $("#signin").classList.toggle("hidden", Boolean(m));
+  $("#history-link").classList.toggle("hidden", !m);
+  $("#history-all").classList.toggle("hidden", !m);
   $("#account").classList.toggle("hidden", !m);
   $("#new").classList.toggle("hidden", !m);
   if (m) {
@@ -51,7 +67,7 @@ async function signIn() {
   } catch { return false; }
 }
 $("#signin").onclick = $("#gate-btn").onclick = async () => {
-  if (await signIn() && !location.pathname.startsWith("/r/")) showComposer();
+  if (await signIn() && !location.pathname.startsWith("/r/")) route();
 };
 $("#acct-btn").onclick = (e) => {
   e.stopPropagation();
@@ -71,9 +87,7 @@ $("#acct-out").onclick = async () => {
 };
 
 function showGate() {
-  $("#gate").classList.remove("hidden");
-  $("#composer").classList.add("hidden");
-  $("#run").classList.add("hidden");
+  showView("#gate");
   document.title = "Scout Dashboard";
 }
 
@@ -97,15 +111,18 @@ $("#scan").onclick = () => {
 $("#new").onclick = async () => {
   if (state?.running) return;
   if (!account && !(await signIn())) return;
-  history.pushState({}, "", "/app"); showComposer(); q.focus();
+  navigate("/app"); q.focus();
 };
-$("#history-toggle").onclick = () => document.body.classList.toggle("show-history");
+$("#hp-new").onclick = $("#hp-empty-new").onclick = () => { navigate("/app"); q.focus(); };
+[$("#history-link"), $("#history-all")].forEach((a) => a.addEventListener("click", (e) => {
+  e.preventDefault();
+  navigate("/history");
+}));
+document.addEventListener("keydown", (e) => { if (e.key === "Escape") $("#acct-menu").classList.add("hidden"); });
 
 function showComposer() {
   if (!account) return showGate();
-  $("#gate").classList.add("hidden");
-  $("#composer").classList.remove("hidden");
-  $("#run").classList.add("hidden");
+  showView("#composer");
   document.title = "Scout Dashboard";
   markActive(null);
 }
@@ -113,9 +130,7 @@ function showComposer() {
 /* ---------- run view ---------- */
 function resetRun(question, meta) {
   state = { running: false, id: null, owner: false, buffer: "", sources: new Map(), searches: 0, reads: 0, pending: null, raf: 0, t0: performance.now(), question };
-  $("#composer").classList.add("hidden");
-  $("#gate").classList.add("hidden");
-  $("#run").classList.remove("hidden");
+  showView("#run");
   $("#run-q").textContent = question;
   $("#run-meta").textContent = meta;
   document.title = `${question.slice(0, 60)} · Scout`;
@@ -128,8 +143,6 @@ function resetRun(question, meta) {
   $("#delete").classList.add("hidden");
   setActions(false);
   updateStats("0.0s");
-  document.body.classList.remove("show-history");
-  window.scrollTo({ top: 0 });
 }
 
 async function runResearch(question, depth, scanWallet = false) {
@@ -368,10 +381,13 @@ function enhance() {
 }
 
 /* ---------- history ---------- */
+let historyItems = [];
 async function loadHistory() {
   if (!account) return;
   const res = await api("/api/reports").catch(() => null);
   const items = res && res.ok ? await res.json() : [];
+  historyItems = items;
+  if (!$("#history-page").classList.contains("hidden")) renderHistoryPage();
   const ul = $("#history");
   ul.innerHTML = "";
   items.forEach((r) => {
@@ -381,12 +397,53 @@ async function loadHistory() {
     a.href = `/r/${r.id}`; a.dataset.id = r.id;
     a.querySelector(".q").textContent = r.question;
     a.querySelector(".d").textContent = `${r.depth} · ${fmtDate(r.created_at)}`;
-    a.onclick = (e) => { e.preventDefault(); if (state?.running) return; history.pushState({}, "", a.href); openReport(r.id); };
+    a.onclick = (e) => { e.preventDefault(); navigate(`/r/${r.id}`); };
     ul.appendChild(li);
   });
   $("#history-empty").classList.toggle("hidden", items.length > 0 || !account);
   if (state?.id) markActive(state.id);
 }
+/* ---------- history page ---------- */
+async function showHistoryPage() {
+  showView("#history-page");
+  document.title = "History · Scout";
+  markActive(null);
+  renderHistoryPage();
+  await loadHistory();
+}
+function renderHistoryPage() {
+  const needle = $("#hp-search").value.trim().toLowerCase();
+  const items = historyItems.filter((r) => !needle || r.question.toLowerCase().includes(needle));
+  const ul = $("#hp-list");
+  ul.innerHTML = "";
+  items.forEach((r) => {
+    const li = document.createElement("li");
+    li.className = "hp-item card";
+    li.innerHTML = `<a class="hp-open"><span class="hp-q"></span><span class="hp-meta mono"></span></a>
+      <div class="hp-actions"><button type="button" class="btn btn-ghost btn-sm" data-act="share">Share</button><button type="button" class="btn btn-ghost btn-sm" data-act="delete">Delete</button></div>`;
+    const a = li.querySelector(".hp-open");
+    a.href = `/r/${r.id}`;
+    a.querySelector(".hp-q").textContent = r.question;
+    a.querySelector(".hp-meta").textContent = `${r.depth} · ${fmtDate(r.created_at)}`;
+    a.onclick = (e) => { e.preventDefault(); navigate(`/r/${r.id}`); };
+    li.querySelector('[data-act="share"]').onclick = () => copyText(`${location.origin}/r/${r.id}`, "Share link copied");
+    li.querySelector('[data-act="delete"]').onclick = async () => {
+      if (!confirm("Delete this report? The share link will stop working.")) return;
+      const res = await api(`/api/reports/${encodeURIComponent(r.id)}`, { method: "DELETE" });
+      if (!res.ok) return toast("Couldn't delete the report");
+      toast("Report deleted");
+      historyItems = historyItems.filter((x) => x.id !== r.id);
+      renderHistoryPage();
+      loadHistory();
+    };
+    ul.appendChild(li);
+  });
+  $("#hp-count").textContent = historyItems.length ? `${items.length} of ${historyItems.length}` : "";
+  $("#hp-empty").classList.toggle("hidden", historyItems.length > 0);
+  $("#hp-nomatch").classList.toggle("hidden", !(historyItems.length && !items.length));
+}
+$("#hp-search").addEventListener("input", renderHistoryPage);
+
 function markActive(id) {
   document.querySelectorAll("#history a").forEach((a) => a.classList.toggle("active", a.dataset.id === id));
 }

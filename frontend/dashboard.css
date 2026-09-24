@@ -1,7 +1,6 @@
 .wrap.wide { max-width: 1440px; }
 .crumb { color: var(--stone); font-size: 13px; margin-left: -20px; }
 .small { font-size: 12px; color: var(--stone); }
-.mobile-only { display: none; }
 
 .dash { display: grid; grid-template-columns: 248px minmax(0, 1fr); gap: 32px; padding-top: 24px; padding-bottom: 64px; }
 
@@ -104,25 +103,79 @@
   padding: 10px 16px; border-radius: var(--r); font-size: 13px; z-index: 50;
 }
 
+/* ---------- nav controls ---------- */
+.lbl-sm { display: none; }
+.nav-history.active { box-shadow: 0 0 0 1px var(--obsidian); color: var(--obsidian); background: var(--white); }
+.hist-icon { flex-direction: column; gap: 3px; }
+.hist-icon i { display: block; width: 14px; height: 1.5px; background: currentColor; }
+.sidebar-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; }
+.view-all { font-size: 11px; color: var(--stone); text-decoration: none; }
+.view-all:hover { color: var(--obsidian); }
+.nav-right { min-width: 0; }
+
+/* ---------- history page ---------- */
+.history-page { max-width: 880px; padding-top: 48px; }
+.hp-head { display: flex; justify-content: space-between; align-items: flex-end; gap: 16px; flex-wrap: wrap; margin-bottom: 24px; }
+.hp-tools { display: flex; align-items: center; gap: 12px; margin-bottom: 16px; }
+.hp-search {
+  flex: 1; min-width: 0; height: 40px; padding: 0 12px; border: 0; border-radius: var(--r); background: var(--white);
+  box-shadow: var(--ring-2); font: 400 14px var(--sans); color: var(--obsidian); outline: 0;
+}
+.hp-search:focus { box-shadow: 0 0 0 1px var(--obsidian); }
+.hp-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
+.hp-item { display: flex; align-items: center; gap: 16px; padding: 14px 16px; }
+.hp-open { flex: 1; min-width: 0; display: grid; gap: 4px; text-decoration: none; color: var(--obsidian); }
+.hp-open:hover .hp-q { text-decoration: underline; text-decoration-color: var(--ash); text-underline-offset: 3px; }
+.hp-q { font-size: 15px; line-height: 1.4; overflow-wrap: anywhere; }
+.hp-meta { font-size: 11px; letter-spacing: .071em; text-transform: uppercase; color: var(--graphite); }
+.hp-actions { display: flex; gap: 6px; flex: none; }
+.hp-empty { display: grid; gap: 12px; justify-items: start; padding: 24px; }
+
+/* ---------- responsive ---------- */
 @media (max-width: 1100px) {
   .run-grid { grid-template-columns: 1fr; }
-  .side { position: static; max-height: none; }
+  .side { position: static; max-height: none; overflow: visible; }
+}
+@media (min-width: 700px) and (max-width: 1100px) {
+  .side { grid-template-columns: repeat(2, minmax(0, 1fr)); align-items: start; }
+  .side > .cli { grid-column: 1 / -1; }
 }
 @media (max-width: 860px) {
-  .dash { grid-template-columns: 1fr; gap: 0; }
-  .sidebar { display: none; position: static; max-height: none; padding: 16px 0; }
-  body.show-history .sidebar { display: block; }
-  .mobile-only { display: inline-flex; }
+  .dash { grid-template-columns: 1fr; gap: 0; padding-top: 8px; }
+  .sidebar { display: none; }
+  .history-page { padding-top: 24px; }
   .composer { padding-top: 32px; }
   .report-card { padding: 20px; }
   .hint { display: none; }
   #go { margin-left: auto; }
   .crumb { display: none; }
   #status span:last-child { display: none; }
+  .run-head { padding: 16px 0; gap: 16px; }
 }
-@media (max-width: 480px) {
-  .wrap { padding: 0 16px; }
-  .nav .wrap { gap: 12px; }
+@media (max-width: 560px) {
+  .nav .wrap { gap: 8px; }
+  .nav-right { gap: 6px; }
+  .lbl-lg { display: none; }
+  .lbl-sm { display: inline; }
+  .hist-icon { display: inline-flex; }
+  .nav-history { width: 32px; padding: 0; }
+  .hp-item { flex-direction: column; align-items: stretch; gap: 12px; }
+  .hp-actions .btn { flex: 1; }
+  .hp-head .btn { width: 100%; }
+  .ask-row { gap: 8px; }
+  #scan { flex: 1 1 auto; }
+  #go { flex: 1 1 100%; margin-left: 0; height: 44px; }
+  .run-actions { width: 100%; }
+  .run-actions .btn { flex: 1 1 auto; }
+  .report-card { padding: 16px; }
+  .report { font-size: 15px; }
+  .report .tldr { padding: 16px; }
+  .acct-menu { width: min(260px, calc(100vw - 32px)); }
+  .composer .h-lg { margin-bottom: 24px; }
+}
+@media (max-width: 400px) {
+  #status { display: none; }
+  #acct-btn { padding: 0 8px; }
 }
 
 /* ---------- account ---------- */

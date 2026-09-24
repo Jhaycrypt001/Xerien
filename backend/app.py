@@ -289,6 +289,7 @@ async def landing() -> FileResponse:
 
 
 @app.get("/app")
+@app.get("/history")
 @app.get("/r/{rid}")
 async def dashboard(rid: str | None = None) -> FileResponse:
     return FileResponse(FRONTEND / "app.html")

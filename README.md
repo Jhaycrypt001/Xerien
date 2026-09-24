@@ -153,14 +153,14 @@ Liquidity and 24h change for EVM tokens come from DexScreener `/tokens/v1/{chain
 
 | | Claude (`backend/claude_agent.py`) | Gemini (`backend/gemini_agent.py`) |
 |---|---|---|
-| Default model | `claude-opus-5` | `gemini-2.5-flash` (the free tier includes Search grounding only on 2.5 models) |
+| Default model | `claude-opus-5` | Auto: the newest stable `gemini-X.Y-flash` your key can use, discovered from the models API and cached for 6 hours |
 | Web research | Server tools `web_search_20260209`, `web_fetch_20260209` | `google_search` + `url_context` tools |
 | Depth | Quick: effort `medium`, ≤4 searches, ≤3 page reads. Deep: effort `high`, ≤10 / ≤8 | Prompted: ≥3 searches (quick), ≥6 (deep) |
 | Reasoning in the trace | Adaptive thinking, `display: "summarized"` | `include_thoughts=True` thought summaries |
 | Output cap | 64,000 tokens (streamed) | 16,384 tokens |
 | Citations | Inline Markdown links written by the model | Inserted **after** generation from `grounding_supports` |
 | Long runs | Continues automatically on `pause_turn`, up to 6 times | One streamed call |
-| Fallbacks | Server-side refusal fallback. If a newer beta or tool version is rejected with a 400 before any output, it retries once with `web_search_20250305` / `web_fetch_20250910` | If URL context is rejected with a 400, retries with Search only |
+| Fallbacks | Server-side refusal fallback. If a newer beta or tool version is rejected with a 400 before any output, it retries once with `web_search_20250305` / `web_fetch_20250910` | A 404 (retired model) triggers one fresh model discovery. A 400 steps down from Search + URL context, to Search only, to no web tools (announced in the trace) |
 
 **Gemini citation insertion.** Gemini returns `grounding_supports[]`, where each item has a `segment.end_index` and the indices of the sources that support it. The offsets are **UTF-8 byte** offsets, not character offsets, so the text is encoded, `[n](uri)` links are inserted from the last position to the first so earlier offsets stay valid, and the result is decoded again. The cited report replaces the streamed text through a `report` event.
 
@@ -305,7 +305,7 @@ That's about 2,900 lines in total (application code, excluding the vendored libr
 | `GEMINI_API_KEY` | none | Gemini provider (free at aistudio.google.com) |
 | `ANTHROPIC_API_KEY` | none | Claude provider (one of the two keys is required) |
 | `LLM_PROVIDER` | `auto` | `auto`, `gemini` or `anthropic` |
-| `GEMINI_MODEL` | `gemini-2.5-flash` | Gemini model id |
+| `GEMINI_MODEL` | `auto` | Pin a Gemini model id, or `auto` to discover the newest Flash model |
 | `CLAUDE_MODEL` | `claude-opus-5` | Claude model id |
 | `CLAUDE_FALLBACKS` | `1` | Server-side refusal fallback for Claude |
 | `MORALIS_API_KEY` | none | Adds BNB Chain and Avalanche to wallet scans |
@@ -380,3 +380,5 @@ python -m backend & curl localhost:8000/api/health
 | Raw exception text reached users | `f"Agent error: {e}"` | Generic message plus server-side logging |
 | Vendored DOMPurify 3.1.6 affected by CVE-2025-26791 | Old pinned version | Upgraded to 3.4.16 (and marked to 15.0.12) |
 | Bundled markdown libraries failed to load in restricted networks | CDN dependency | Libraries vendored into `frontend/vendor/` |
+| Live Gemini runs failed with `404` | `gemini-2.5-flash` is no longer offered to new API keys | Model auto-discovery from the models API, with rediscovery on 404 |
+| Signed-in mobile navbar was wider than the screen | Too many labelled buttons | Compact labels and icons; History moved to its own `/history` page |
